@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import {
   ANNOTATION_LOCATION,
   ANNOTATION_ORIGIN_LOCATION,
@@ -93,7 +94,7 @@ export class GenericScmEventRefreshProvider implements EntityProvider {
       50,
     )) {
       const result = await this.#knex<DbRefreshStateRow>('refresh_state')
-        .update({ next_update_at: this.#knex.fn.now() })
+        .update({ next_update_at: getDatabaseNow(this.#knex) })
         .whereIn('entity_id', keysQuery => {
           return keysQuery
             .table<DbRefreshKeysRow>('refresh_keys')
@@ -120,7 +121,7 @@ export class GenericScmEventRefreshProvider implements EntityProvider {
       10,
     )) {
       const result = await this.#knex<DbRefreshStateRow>('refresh_state')
-        .update({ next_update_at: this.#knex.fn.now() })
+        .update({ next_update_at: getDatabaseNow(this.#knex) })
         .whereIn('entity_id', keysQuery => {
           return keysQuery
             .table<DbRefreshKeysRow>('refresh_keys')

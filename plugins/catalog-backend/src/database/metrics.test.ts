@@ -131,7 +131,7 @@ describe.each(databases.eachSupportedId())('metrics, %p', databaseId => {
       const finalEntitiesQueries: string[] = [];
       knex.on('query', (q: { sql: string }) => {
         if (
-          /from\s+["`]?final_entities["`]?/i.test(q.sql) &&
+          /from\s+["`\[]?final_entities["`\]]?/i.test(q.sql) &&
           /^\s*select/i.test(q.sql)
         ) {
           finalEntitiesQueries.push(q.sql);

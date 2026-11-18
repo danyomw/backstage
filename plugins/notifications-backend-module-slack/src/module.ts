@@ -39,6 +39,9 @@ function nowMinus(knex: Knex, seconds: number): Knex.Raw {
   } else if (knex.client.config.client.includes('mysql')) {
     return knex.raw(`now() - interval ${seconds} second`);
   }
+  if (knex.client.config.client === 'mssql') {
+    return knex.raw('DATEADD(second, ?, SYSUTCDATETIME())', [-seconds]);
+  }
   return knex.raw(`now() - interval '${seconds} seconds'`);
 }
 

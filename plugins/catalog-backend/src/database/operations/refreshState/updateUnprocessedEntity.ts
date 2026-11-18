@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Entity, stringifyEntityRef } from '@backstage/catalog-model';
 import { Knex } from 'knex';
 import { DbRefreshStateRow } from '../../tables';
@@ -41,11 +42,11 @@ export async function updateUnprocessedEntity(options: {
       unprocessed_entity: serializedEntity,
       unprocessed_hash: hash,
       location_key: locationKey,
-      last_discovery_at: tx.fn.now(),
+      last_discovery_at: getDatabaseNow(tx),
       // We only get to this point if a processed entity actually had any changes, or
       // if an entity provider requested this mutation, meaning that we can safely
       // bump the deferred entities to the front of the queue for immediate processing.
-      next_update_at: tx.fn.now(),
+      next_update_at: getDatabaseNow(tx),
     })
     .where('entity_ref', entityRef)
     .andWhere(inner => {

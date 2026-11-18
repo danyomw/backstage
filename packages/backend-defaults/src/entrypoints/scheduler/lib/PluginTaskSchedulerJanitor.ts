@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 import { Duration } from 'luxon';
 import { DB_TASKS_TABLE, DbTasksRow } from '../database/tables';
@@ -59,7 +59,7 @@ export class PluginTaskSchedulerJanitor {
     if (configClient.includes('sqlite3') || configClient.includes('mysql')) {
       tasks = await this.knex<DbTasksRow>(DB_TASKS_TABLE)
         .select('id')
-        .where('current_run_expires_at', '<', this.knex.fn.now());
+        .where('current_run_expires_at', '<', getDatabaseNow(this.knex));
       await this.knex<DbTasksRow>(DB_TASKS_TABLE)
         .whereIn(
           'id',
@@ -69,17 +69,17 @@ export class PluginTaskSchedulerJanitor {
           current_run_ticket: dbNull,
           current_run_started_at: dbNull,
           current_run_expires_at: dbNull,
-          last_run_ended_at: this.knex.fn.now(),
+          last_run_ended_at: getDatabaseNow(this.knex),
           last_run_error_json: serializeError(new Error('Task timed out')),
         });
     } else {
       tasks = await this.knex<DbTasksRow>(DB_TASKS_TABLE)
-        .where('current_run_expires_at', '<', this.knex.fn.now())
+        .where('current_run_expires_at', '<', getDatabaseNow(this.knex))
         .update({
           current_run_ticket: dbNull,
           current_run_started_at: dbNull,
           current_run_expires_at: dbNull,
-          last_run_ended_at: this.knex.fn.now(),
+          last_run_ended_at: getDatabaseNow(this.knex),
           last_run_error_json: serializeError(new Error('Task timed out')),
         })
         .returning(['id']);

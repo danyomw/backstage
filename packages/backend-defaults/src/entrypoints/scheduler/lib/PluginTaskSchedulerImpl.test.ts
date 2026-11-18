@@ -32,7 +32,7 @@ import { metricsServiceMock } from '@backstage/backend-test-utils/alpha';
 jest.setTimeout(60_000);
 
 const databases = TestDatabases.create({
-  ids: ['POSTGRES_18', 'POSTGRES_14', 'SQLITE_3'],
+  ids: ['POSTGRES_18', 'POSTGRES_14', 'MSSQL_2022', 'SQLITE_3'],
 });
 
 const addShutdownHook = jest.fn();
@@ -58,7 +58,10 @@ function setup(databaseId: TestDatabaseId) {
   beforeAll(async () => {
     // Make sure the database is running before mocking timers, in case of testcontainers
     await databases.init(databaseId);
-    jest.useFakeTimers();
+    // Database drivers need their internal callbacks to run on the real clock.
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
   }, 60_000);
 
   afterAll(() => {

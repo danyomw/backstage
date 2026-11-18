@@ -48,7 +48,7 @@ import {
   isQueryEntitiesCursorRequest,
   isQueryEntitiesInitialRequest,
 } from './util';
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, getDatabaseNow } from '@backstage/backend-plugin-api';
 import { FilterPredicate } from '@backstage/filter-predicates';
 import { applyEntityFilterToQuery } from './request/applyEntityFilterToQuery';
 import { sortsAfterMatching } from './request/longInLists';
@@ -712,7 +712,7 @@ export class DefaultEntitiesCatalog implements EntitiesCatalog {
         await tx<DbRefreshStateRow>('refresh_state')
           .update({
             result_hash: 'child-was-deleted',
-            next_update_at: tx.fn.now(),
+            next_update_at: getDatabaseNow(tx),
           })
           .whereIn(
             'entity_id',
@@ -722,7 +722,7 @@ export class DefaultEntitiesCatalog implements EntitiesCatalog {
         await tx<DbRefreshStateRow>('refresh_state')
           .update({
             result_hash: 'child-was-deleted',
-            next_update_at: tx.fn.now(),
+            next_update_at: getDatabaseNow(tx),
           })
           .whereIn('entity_ref', function parents(builder) {
             return builder

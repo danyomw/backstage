@@ -21,6 +21,7 @@
  */
 exports.up = async function up(knex) {
   const isMySQL = knex.client.config.client.includes('mysql');
+  const isMssql = knex.client.config.client === 'mssql';
   await knex.schema.createTable('refresh_state', table => {
     table.comment('Location refresh states');
     table
@@ -58,6 +59,7 @@ exports.up = async function up(knex) {
       .comment('The last timestamp that this entity was discovered');
     table.unique(['entity_ref'], {
       indexName: 'refresh_state_entity_ref_uniq',
+      ...(isMssql ? { useConstraint: true } : {}),
     });
     table.index('entity_id', 'refresh_state_entity_id_idx');
     table.index('entity_ref', 'refresh_state_entity_ref_idx');
@@ -90,9 +92,8 @@ exports.up = async function up(knex) {
   });
 
   await knex.schema.createTable('refresh_state_references', table => {
-    const textColumn = isMySQL
-      ? table.string.bind(table)
-      : table.text.bind(table);
+    const textColumn =
+      isMySQL || isMssql ? table.string.bind(table) : table.text.bind(table);
 
     table.comment('Edges between refresh state rows');
     table
@@ -105,7 +106,7 @@ exports.up = async function up(knex) {
       .nullable()
       .references('entity_ref')
       .inTable('refresh_state')
-      .onDelete('CASCADE')
+      .onDelete(isMssql ? 'NO ACTION' : 'CASCADE')
       .comment('EntityRef of entity sources');
     textColumn('target_entity_ref')
       .notNullable()
@@ -169,6 +170,20 @@ exports.up = async function up(knex) {
     table.index(['key'], 'search_key_idx');
     table.index(['value'], 'search_value_idx');
   });
+
+  if (isMssql) {
+    // SQL Server rejects two cascade paths to refresh_state_references. The
+    // trigger removes outgoing edges before the target FK cascades incoming ones.
+    await knex.raw(`CREATE TRIGGER refresh_state_delete_references ON refresh_state
+      INSTEAD OF DELETE AS
+      BEGIN
+        SET NOCOUNT ON;
+        DELETE FROM refresh_state_references
+          WHERE source_entity_ref IN (SELECT entity_ref FROM deleted);
+        DELETE FROM refresh_state
+          WHERE entity_id IN (SELECT entity_id FROM deleted);
+      END`);
+  }
 };
 
 /**

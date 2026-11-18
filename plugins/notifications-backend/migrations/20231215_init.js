@@ -20,6 +20,10 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.createTable('notification', table => {
     table.uuid('id').primary();
     table.string('user', 255).notNullable();
@@ -30,7 +34,7 @@ exports.up = async function up(knex) {
     table.string('origin', 255).notNullable();
     table.string('scope', 255).nullable();
     table.string('topic', 255).nullable();
-    table.datetime('created').defaultTo(knex.fn.now()).notNullable();
+    table.datetime('created').defaultTo(now).notNullable();
     table.datetime('updated').nullable();
     table.datetime('read').nullable();
     table.datetime('done').nullable();

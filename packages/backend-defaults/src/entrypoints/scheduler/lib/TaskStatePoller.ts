@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, getDatabaseNow } from '@backstage/backend-plugin-api';
 import { createDeferred, DeferredPromise } from '@backstage/types';
 import { Knex } from 'knex';
 import { Duration } from 'luxon';
@@ -190,10 +190,18 @@ export class TaskStatePoller {
         settingsJson: 'settings_json',
         ready: this.#knex.raw(
           `CASE
-            WHEN next_run_start_at <= ? AND current_run_ticket IS NULL THEN TRUE
-            ELSE FALSE
+            WHEN next_run_start_at <= ? AND current_run_ticket IS NULL THEN ${
+              this.#knex.client.config.client === 'mssql'
+                ? 'CAST(1 AS bit)'
+                : 'TRUE'
+            }
+            ELSE ${
+              this.#knex.client.config.client === 'mssql'
+                ? 'CAST(0 AS bit)'
+                : 'FALSE'
+            }
           END`,
-          [this.#knex.fn.now()],
+          [getDatabaseNow(this.#knex)],
         ),
       });
 

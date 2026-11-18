@@ -79,7 +79,7 @@ class TestContextManager implements ContextManager {
 }
 
 const nonPostgresDatabases = TestDatabases.create({
-  ids: ['SQLITE_3', 'MYSQL_8'],
+  ids: ['SQLITE_3', 'MYSQL_8', 'MSSQL_2022'],
 });
 
 describe.each(nonPostgresDatabases.eachSupportedId())(

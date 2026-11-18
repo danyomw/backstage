@@ -20,10 +20,14 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   return knex.schema.createTable('location_update_log', table => {
     table.uuid('id').primary();
     table.enum('status', ['success', 'fail']).notNullable();
-    table.dateTime('created_at').defaultTo(knex.fn.now()).notNullable();
+    table.dateTime('created_at').defaultTo(now).notNullable();
     table.string('message');
     table
       .uuid('location_id')

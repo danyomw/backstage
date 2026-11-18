@@ -18,6 +18,7 @@ import { Knex } from 'knex';
 import lodash from 'lodash';
 import { DbRefreshStateReferencesRow } from '../../tables';
 import { markForStitching } from '../stitcher/markForStitching';
+import { retryOnDeadlock, whereInArray } from '../../util';
 
 /**
  * Given a number of entity refs originally created by a given entity provider
@@ -32,6 +33,16 @@ export async function deleteWithEagerPruningOfChildren(options: {
   sourceKey: string;
 }): Promise<number> {
   const { knex, entityRefs, sourceKey } = options;
+
+  if (knex.client.config.client === 'mssql' && !knex.isTransaction) {
+    return retryOnDeadlock(
+      () =>
+        knex.transaction(tx =>
+          deleteWithEagerPruningOfChildren({ ...options, knex: tx }),
+        ),
+      knex,
+    );
+  }
 
   // Split up the operation by (large) chunks, so that we do not hit database
   // limits for the number of permitted bindings on a precompiled statement
@@ -78,6 +89,10 @@ async function findDescendantsThatWouldHaveBeenOrphanedByDeletion(options: {
   sourceKey: string;
 }): Promise<{ orphanEntityRefs: string[] }> {
   const { knex, refs, sourceKey } = options;
+
+  if (knex.client.config.client === 'mssql') {
+    return findMssqlDescendantsToDelete(knex, refs, sourceKey);
+  }
 
   const orphans: string[] =
     // First find all nodes that can be reached downwards from the roots
@@ -224,6 +239,81 @@ async function findDescendantsThatWouldHaveBeenOrphanedByDeletion(options: {
       .then(rows => rows.map(row => row.entity_ref));
 
   return { orphanEntityRefs: orphans };
+}
+
+async function findMssqlDescendantsToDelete(
+  knex: Knex | Knex.Transaction,
+  refs: string[],
+  sourceKey: string,
+): Promise<{ orphanEntityRefs: string[] }> {
+  // SQL Server requires UNION ALL in recursive CTEs. Traverse each reference
+  // once instead, retaining the existing cycle-safe set semantics. Range locks
+  // keep the reference graph stable until the surrounding deletion commits.
+  const references = () =>
+    knex<DbRefreshStateReferencesRow>('refresh_state_references')
+      .from(knex.raw('?? WITH (HOLDLOCK)', ['refresh_state_references']))
+      .select('source_key', 'source_entity_ref', 'target_entity_ref');
+  const roots = await references()
+    .where({ source_key: sourceKey })
+    .where(whereInArray('target_entity_ref', refs));
+  const descendants = new Set(roots.map(row => row.target_entity_ref));
+  let frontier = [...descendants];
+  while (frontier.length > 0) {
+    const children = await references().where(
+      whereInArray('source_entity_ref', frontier),
+    );
+    frontier = [];
+    for (const child of children) {
+      if (!descendants.has(child.target_entity_ref)) {
+        descendants.add(child.target_entity_ref);
+        frontier.push(child.target_entity_ref);
+      }
+    }
+  }
+
+  const ancestors = new Set(descendants);
+  const retained = new Set<string>();
+  const requested = new Set(refs);
+  frontier = [...ancestors];
+  while (frontier.length > 0) {
+    const parents = await references().where(
+      whereInArray('target_entity_ref', frontier),
+    );
+    frontier = [];
+    for (const parent of parents) {
+      if (
+        parent.source_key !== null &&
+        (parent.source_key !== sourceKey ||
+          !requested.has(parent.target_entity_ref))
+      ) {
+        retained.add(parent.target_entity_ref);
+      }
+      if (
+        parent.source_entity_ref &&
+        !ancestors.has(parent.source_entity_ref)
+      ) {
+        ancestors.add(parent.source_entity_ref);
+        frontier.push(parent.source_entity_ref);
+      }
+    }
+  }
+
+  frontier = [...retained];
+  while (frontier.length > 0) {
+    const children = await references()
+      .where(whereInArray('source_entity_ref', frontier))
+      .where(whereInArray('target_entity_ref', [...ancestors]));
+    frontier = [];
+    for (const child of children) {
+      if (!retained.has(child.target_entity_ref)) {
+        retained.add(child.target_entity_ref);
+        frontier.push(child.target_entity_ref);
+      }
+    }
+  }
+  return {
+    orphanEntityRefs: [...descendants].filter(ref => !retained.has(ref)),
+  };
 }
 
 async function markEntitiesAffectedByDeletionForStitching(options: {

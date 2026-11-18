@@ -28,14 +28,22 @@ exports.up = async function up(knex) {
       .comment('The entity reference of the entity');
   });
 
-  await knex
-    .update({
-      entity_ref: knex
-        .select('r.entity_ref')
-        .from('refresh_state as r')
-        .where('r.entity_id', knex.raw('f.entity_id')),
-    })
-    .table('final_entities as f');
+  if (knex.client.config.client === 'mssql') {
+    await knex('final_entities').update({
+      entity_ref: knex('refresh_state')
+        .select('entity_ref')
+        .whereRaw('refresh_state.entity_id = final_entities.entity_id'),
+    });
+  } else {
+    await knex
+      .update({
+        entity_ref: knex
+          .select('r.entity_ref')
+          .from('refresh_state as r')
+          .where('r.entity_id', knex.raw('f.entity_id')),
+      })
+      .table('final_entities as f');
+  }
 
   await knex.schema.alterTable('final_entities', table => {
     table.string('entity_ref').notNullable().alter({ alterNullable: true });

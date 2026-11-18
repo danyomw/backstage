@@ -45,6 +45,7 @@ import {
 import {
   LoggerService,
   isDatabaseConflictError,
+  getDatabaseNow,
 } from '@backstage/backend-plugin-api';
 
 // The number of items that are sent per batch to the database layer, when
@@ -208,8 +209,8 @@ export class DefaultProviderDatabase implements ProviderDatabase {
               unprocessed_hash: item.hash,
               errors: '',
               location_key: item.deferred.locationKey,
-              next_update_at: tx.fn.now(),
-              last_discovery_at: tx.fn.now(),
+              next_update_at: getDatabaseNow(tx),
+              last_discovery_at: getDatabaseNow(tx),
             })),
             BATCH_SIZE,
           );

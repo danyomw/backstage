@@ -20,6 +20,10 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.createTable('offline_sessions', table => {
     table.comment(
       'Offline sessions for refresh tokens in dynamic client registration and device auth flows',
@@ -49,13 +53,13 @@ exports.up = async function up(knex) {
     table
       .timestamp('created_at', { useTz: true, precision: 0 })
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('Session creation timestamp');
 
     table
       .timestamp('last_used_at', { useTz: true, precision: 0 })
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('Last token refresh timestamp');
 
     table

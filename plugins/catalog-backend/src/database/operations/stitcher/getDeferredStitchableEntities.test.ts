@@ -155,6 +155,9 @@ describe.each(databases.eachSupportedId())(
           leaseExpression = 'next_stitch_at::text as lease';
         } else if (databaseId.startsWith('MYSQL')) {
           leaseExpression = 'CAST(next_stitch_at AS CHAR) as lease';
+        } else if (databaseId === 'MSSQL_2022') {
+          leaseExpression =
+            'CONVERT(nvarchar(33), next_stitch_at, 126) as lease';
         }
         const exact = await knex('stitch_queue')
           .select(knex.raw(leaseExpression))

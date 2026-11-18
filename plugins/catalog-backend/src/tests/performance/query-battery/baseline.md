@@ -752,3 +752,56 @@ noise of master: those plans already built the set first.
   more than 100 entities. It fixed scenario 14 with 99 claims including the
   largest group (22.9 s to 5.0 s), but scenario 14 with 40 or 99 claims went
   from 2.6 s to 4.8 s and scenario 12 from 3.5 s to 4.3 s.
+
+## SQL Server support regression check, 2026-11-18
+
+The PostgreSQL comparison used a local PostgreSQL 18 test database with 60,000
+entities and 627,595 search rows. It covers all 21 scenarios, with 3, 10, 40,
+and 120 permission claims where the scenarios use permissions. The largest
+claim owns most of the fixture. The late dataset pages return at least 10,001
+rows, and scenario 20 checks both groups and components.
+
+All 130 captured queries have identical SQL and parameters before and after
+the SQL Server changes. The first runs used separately created copies of the
+same fixture and showed timing and plan differences under concurrent test
+load. The final check alternated each before and after query on one database,
+with one warmup and three measured executions per version. All 130 final plan
+shapes match.
+
+The only increase above 50% is the unfiltered template facet query, from
+0.353 ms to 0.615 ms. Its plan is unchanged. Every query above 5 ms stays below
+the 50% regression threshold. These local timings do not replace the
+production-scale baseline or prove production latency.
+
+| Scenario | Queries and variants | Before, highest median, ms | After, highest median, ms |
+| -------- | -------------------: | -------------------------: | ------------------------: |
+| 1        |                    5 |                      1.938 |                     1.813 |
+| 2        |                    5 |                    508.735 |                   482.336 |
+| 3        |                   10 |                    229.995 |                   244.605 |
+| 4        |                    5 |                     75.862 |                    70.070 |
+| 5        |                    5 |                    163.744 |                   168.242 |
+| 6        |                    5 |                      0.376 |                     0.337 |
+| 7        |                   10 |                    109.407 |                   114.185 |
+| 8        |                    2 |                      0.052 |                     0.054 |
+| 9        |                    1 |                      0.057 |                     0.062 |
+| 10       |                    5 |                    100.780 |                    96.111 |
+| 11       |                    1 |                     37.639 |                    37.097 |
+| 12       |                    5 |                  12356.006 |                 12923.229 |
+| 13       |                    5 |                    637.910 |                   606.587 |
+| 14       |                    5 |                   1376.113 |                  1301.372 |
+| 15       |                   12 |                    135.478 |                   131.439 |
+| 16       |                   12 |                    145.234 |                   155.052 |
+| 17       |                    4 |                     64.017 |                    62.097 |
+| 18       |                   12 |                    118.509 |                   116.473 |
+| 19       |                    8 |                    199.613 |                   193.235 |
+| 20       |                   10 |                     60.122 |                    63.999 |
+| 21       |                    3 |                    208.785 |                   193.521 |
+
+Representative final plans are appended to `plans.md` and `plans.json`.
+The full SQL, claim lists, and measured medians for all variants are in
+[`sql-server-support-comparison.json`](./sql-server-support-comparison.json).
+
+The local fixture produces sequential scans and materialization in some broad
+count, facet, and deep page plans. These patterns are present for both versions;
+no new anti-pattern appears in the paired comparison. The production-scale
+anti-pattern limits remain unchanged.

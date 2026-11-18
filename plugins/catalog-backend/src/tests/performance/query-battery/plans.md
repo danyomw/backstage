@@ -4457,3 +4457,705 @@ Planning:
 Planning Time: 2.208 ms
 Execution Time: 80882.884 ms
 ```
+
+## SQL Server support comparison, 2026-11-18
+
+These representative PostgreSQL 18 plans come from the local 60,000-entity
+fixture. Full before and after plan shapes match for all 130 queries. The
+permission examples below use 120 claims.
+
+### Scenario 1, 1_nop_q0
+
+```text
+Limit (actual time=0.18..1.047 rows=21 loops=1)
+  Shared Hit Blocks: 535
+  Nested Loop (actual time=0.179..1.043 rows=21 loops=1)
+    Shared Hit Blocks: 535
+    Nested Loop (actual time=0.165..0.867 rows=21 loops=1)
+      Shared Hit Blocks: 410
+      Index Only Scan using search_key_value_entity_idx on search (actual time=0.016..0.134 rows=96 loops=1)
+        Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+        Shared Hit Blocks: 101
+      Memoize (actual time=0.007..0.007 rows=0.22 loops=96)
+        Shared Hit Blocks: 309
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.006..0.006 rows=0.22 loops=96)
+          Index Cond: ((entity_id = (search.entity_id)::text) AND (key = 'kind'::text) AND (value = 'component'::text))
+          Shared Hit Blocks: 309
+    Index Scan using final_entities_pkey on final_entities (actual time=0.007..0.007 rows=1 loops=21)
+      Index Cond: ((entity_id)::text = (search.entity_id)::text)
+      Filter: (final_entity IS NOT NULL)
+      Shared Hit Blocks: 105
+Planning Time: 0.643 ms
+Execution Time: 1.079 ms
+```
+
+### Scenario 2, 2_nop_q0
+
+```text
+Aggregate (actual time=49.251..55.509 rows=1 loops=1)
+  Shared Hit Blocks: 55157
+  Shared Read Blocks: 2376
+  Gather (actual time=48.934..55.497 rows=3 loops=1)
+    Shared Hit Blocks: 55157
+    Shared Read Blocks: 2376
+    Aggregate (actual time=45.401..45.406 rows=1 loops=3)
+      Shared Hit Blocks: 55157
+      Shared Read Blocks: 2376
+      Nested Loop (actual time=9.305..45.061 rows=4000.33 loops=3)
+        Shared Hit Blocks: 55157
+        Shared Read Blocks: 2376
+        Hash Join (actual time=9.233..18.183 rows=4000.33 loops=3)
+          Hash Cond: ((final_entities.entity_id)::text = (search_flt.entity_id)::text)
+          Shared Hit Blocks: 7151
+          Shared Read Blocks: 2376
+          Seq Scan on final_entities (actual time=4.461..8.812 rows=20000 loops=3)
+            Filter: (final_entity IS NOT NULL)
+            Shared Hit Blocks: 4825
+            Shared Read Blocks: 2376
+          Hash (actual time=4.528..4.529 rows=4000.33 loops=3)
+            Shared Hit Blocks: 2326
+            Bitmap Heap Scan on search (actual time=0.431..2.798 rows=4000.33 loops=3)
+              Shared Hit Blocks: 2326
+              Bitmap Index Scan using search_key_value_entity_idx (actual time=0.916..0.917 rows=12001 loops=1)
+                Index Cond: (((key)::text = 'kind'::text) AND ((value)::text = 'component'::text))
+                Shared Hit Blocks: 121
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.006..0.006 rows=1 loops=12001)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'metadata.name'::text) AND (value IS NOT NULL))
+          Shared Hit Blocks: 48006
+Planning Time: 0.605 ms
+Execution Time: 55.572 ms
+```
+
+### Scenario 3, 3_nop_q0
+
+```text
+Limit (actual time=0.038..0.099 rows=21 loops=1)
+  Shared Hit Blocks: 44
+  Index Scan using final_entities_pkey on final_entities (actual time=0.036..0.094 rows=21 loops=1)
+    Filter: (final_entity IS NOT NULL)
+    Shared Hit Blocks: 44
+Planning Time: 0.136 ms
+Execution Time: 0.144 ms
+```
+
+### Scenario 4, 4_nop_q0
+
+```text
+Aggregate (actual time=0.453..0.463 rows=14 loops=1)
+  Shared Hit Blocks: 117
+  Sort (actual time=0.443..0.446 rows=14 loops=1)
+    Sort Key: search.original_value
+    Shared Hit Blocks: 117
+    Nested Loop (actual time=0.076..0.413 rows=14 loops=1)
+      Join Filter: ((search_flt.entity_id)::text = (final_entities.entity_id)::text)
+      Shared Hit Blocks: 117
+      Nested Loop (actual time=0.06..0.226 rows=14 loops=1)
+        Shared Hit Blocks: 61
+        Index Only Scan using search_key_value_entity_idx on search (actual time=0.031..0.036 rows=14 loops=1)
+          Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+          Shared Hit Blocks: 5
+        Index Scan using search_entity_key_value_idx on search (actual time=0.012..0.012 rows=1 loops=14)
+          Index Cond: (((entity_id)::text = (search_flt.entity_id)::text) AND ((key)::text = 'spec.type'::text))
+          Filter: (original_value IS NOT NULL)
+          Shared Hit Blocks: 56
+      Index Scan using final_entities_pkey on final_entities (actual time=0.012..0.012 rows=1 loops=14)
+        Index Cond: ((entity_id)::text = (search.entity_id)::text)
+        Filter: (final_entity IS NOT NULL)
+        Shared Hit Blocks: 56
+Planning Time: 1.071 ms
+Execution Time: 0.615 ms
+```
+
+### Scenario 5, 5_nop_q0
+
+```text
+Aggregate (actual time=54.556..59.503 rows=90 loops=1)
+  Shared Hit Blocks: 48888
+  Gather Merge (actual time=54.543..59.427 rows=191 loops=1)
+    Shared Hit Blocks: 48888
+    Sort (actual time=49.33..49.341 rows=63.67 loops=3)
+      Sort Key: search.original_value
+      Shared Hit Blocks: 48888
+      Aggregate (actual time=49.166..49.194 rows=63.67 loops=3)
+        Shared Hit Blocks: 48872
+        Nested Loop (actual time=15.818..47.784 rows=4000.33 loops=3)
+          Join Filter: ((search_flt.entity_id)::text = (final_entities.entity_id)::text)
+          Shared Hit Blocks: 48872
+          Hash Join (actual time=15.73..20.103 rows=4000.33 loops=3)
+            Hash Cond: ((search.entity_id)::text = (search_flt.entity_id)::text)
+            Shared Hit Blocks: 866
+            Index Only Scan using search_facets_covering_idx on search (actual time=0.1..9.1 rows=20000 loops=3)
+              Index Cond: (key = 'spec.type'::text)
+              Shared Hit Blocks: 741
+            Hash (actual time=3.953..3.954 rows=4000.33 loops=3)
+              Shared Hit Blocks: 125
+              Index Only Scan using search_key_value_entity_idx on search (actual time=0.046..0.874 rows=4000.33 loops=3)
+                Index Cond: ((key = 'kind'::text) AND (value = 'component'::text))
+                Shared Hit Blocks: 125
+          Index Scan using final_entities_pkey on final_entities (actual time=0.006..0.006 rows=1 loops=12001)
+            Index Cond: ((entity_id)::text = (search.entity_id)::text)
+            Filter: (final_entity IS NOT NULL)
+            Shared Hit Blocks: 48006
+Planning Time: 0.796 ms
+Execution Time: 59.597 ms
+```
+
+### Scenario 6, 6_nop_q0
+
+```text
+Index Scan using final_entities_entity_ref_uniq on final_entities (actual time=0.057..0.059 rows=1 loops=1)
+  Index Cond: ((entity_ref)::text = ANY ('{component:default/my-service}'::text[]))
+  Shared Hit Blocks: 4
+Planning Time: 0.13 ms
+Execution Time: 0.088 ms
+```
+
+### Scenario 7, 7_nop_q0
+
+```text
+Limit (actual time=4.895..5.762 rows=21 loops=1)
+  Shared Hit Blocks: 950
+  Nested Loop (actual time=4.893..5.755 rows=21 loops=1)
+    Join Filter: ((final_entities.entity_id)::text = (search.entity_id)::text)
+    Shared Hit Blocks: 950
+    Nested Loop (actual time=4.872..5.53 rows=21 loops=1)
+      Shared Hit Blocks: 866
+      Index Only Scan using search_key_value_entity_idx on search (actual time=4.832..4.859 rows=102 loops=1)
+        Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+        Filter: ((value)::text ~~ '%player%'::text)
+        Rows Removed by Filter: 29653
+        Shared Hit Blocks: 559
+      Index Only Scan using search_entity_key_value_idx on search (actual time=0.006..0.006 rows=0.21 loops=102)
+        Index Cond: ((entity_id = (search.entity_id)::text) AND (key = 'kind'::text) AND (value = 'component'::text))
+        Shared Hit Blocks: 307
+    Index Scan using final_entities_pkey on final_entities (actual time=0.01..0.01 rows=1 loops=21)
+      Index Cond: ((entity_id)::text = (search_flt.entity_id)::text)
+      Filter: (final_entity IS NOT NULL)
+      Shared Hit Blocks: 84
+Planning Time: 0.886 ms
+Execution Time: 5.808 ms
+```
+
+### Scenario 8, 8_nop_q0
+
+```text
+Index Scan using final_entities_entity_ref_uniq on final_entities (actual time=0.033..0.034 rows=1 loops=1)
+  Index Cond: ((entity_ref)::text = 'component:default/my-service'::text)
+  Shared Hit Blocks: 4
+Planning Time: 0.102 ms
+Execution Time: 0.05 ms
+```
+
+### Scenario 9, 9_nop_q0
+
+```text
+Aggregate (actual time=0.039..0.04 rows=1 loops=1)
+  Shared Hit Blocks: 4
+  Index Only Scan using refresh_state_references_target_entity_ref_idx on refresh_state_references (actual time=0.033..0.034 rows=1 loops=1)
+    Index Cond: (target_entity_ref = 'component:default/my-service'::text)
+    Shared Hit Blocks: 4
+Planning Time: 0.09 ms
+Execution Time: 0.062 ms
+```
+
+### Scenario 10, 10_nop_q0
+
+```text
+Aggregate (actual time=15.07..15.072 rows=1 loops=1)
+  Shared Hit Blocks: 6551
+  Shared Read Blocks: 650
+  Seq Scan on final_entities (actual time=3.537..11.919 rows=60000 loops=1)
+    Filter: (final_entity IS NOT NULL)
+    Shared Hit Blocks: 6551
+    Shared Read Blocks: 650
+Planning Time: 0.086 ms
+Execution Time: 15.1 ms
+```
+
+### Scenario 11, 11_nop_q0
+
+```text
+Limit (actual time=37.031..37.035 rows=0 loops=1)
+  Shared Hit Blocks: 4375
+  Hash Join (actual time=37.029..37.033 rows=0 loops=1)
+    Hash Cond: ((refresh_state.entity_ref)::text = refresh_state_references.target_entity_ref)
+    Shared Hit Blocks: 4375
+    Seq Scan on refresh_state (actual time=0.009..8.698 rows=60000 loops=1)
+      Shared Hit Blocks: 3750
+    Hash (actual time=13.196..13.198 rows=60000 loops=1)
+      Shared Hit Blocks: 625
+      Seq Scan on refresh_state_references (actual time=0.004..4.335 rows=60000 loops=1)
+        Shared Hit Blocks: 625
+Planning Time: 0.265 ms
+Execution Time: 37.097 ms
+```
+
+### Scenario 12, 12_nop_q0
+
+```text
+Limit (actual time=15.338..88.005 rows=2001 loops=1)
+  Shared Hit Blocks: 37508
+  Nested Loop (actual time=0.392..72.745 rows=2001 loops=1)
+    Shared Hit Blocks: 37508
+    Index Only Scan using search_key_value_entity_idx on search (actual time=0.077..0.696 rows=2585 loops=1)
+      Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+      Shared Hit Blocks: 54
+    Memoize (actual time=0.027..0.027 rows=0.77 loops=2585)
+      Shared Hit Blocks: 37454
+      Index Scan using final_entities_pkey on final_entities (actual time=0.026..0.026 rows=0.77 loops=2585)
+        Index Cond: ((entity_id)::text = (search.entity_id)::text)
+        Filter: ((final_entity IS NOT NULL) AND ((EXISTS(SubPlan 1) AND EXISTS(SubPlan 3) AND EXISTS(SubPlan 5)) OR (EXISTS(SubPlan 7) AND EXISTS(SubPlan 9) AND EXISTS(SubPlan 11))))
+        Shared Hit Blocks: 37454
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.007..0.007 rows=0.05 loops=2585)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'kind'::text) AND (value = 'subcomponent'::text))
+          Shared Hit Blocks: 7756
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.005..0.005 rows=1 loops=138)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'spec.type'::text) AND (value = 'workflow'::text))
+          Shared Hit Blocks: 415
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.004..0.004 rows=1 loops=138)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'relations.partof'::text) AND (value = 'component:default/content_analytics_dbt'::text))
+          Shared Hit Blocks: 415
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.004..0.004 rows=0.76 loops=2447)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'kind'::text) AND (value = 'api'::text))
+          Shared Hit Blocks: 7344
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.004..0.004 rows=1 loops=1863)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'spec.type'::text) AND (value = 'dataset'::text))
+          Shared Hit Blocks: 5592
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.004..0.004 rows=1 loops=1863)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'relations.apiprovidedby'::text) AND (value = 'component:default/content_analytics_dbt'::text))
+          Shared Hit Blocks: 5592
+Planning Time: 1.162 ms
+Execution Time: 89.698 ms
+```
+
+### Scenario 13, 13_nop_q0
+
+```text
+Limit (actual time=56.342..58.353 rows=10001 loops=1)
+  Shared Hit Blocks: 5088
+  Shared Read Blocks: 3130
+  Temp Read Blocks: 623
+  Temp Written Blocks: 624
+  Sort (actual time=56.34..57.759 rows=10001 loops=1)
+    Sort Key: final_entities.entity_id
+    Shared Hit Blocks: 5088
+    Shared Read Blocks: 3130
+    Temp Read Blocks: 623
+    Temp Written Blocks: 624
+    Hash Join (actual time=38.851..50.037 rows=12338 loops=1)
+      Hash Cond: ((search_flt.entity_id)::text = (final_entities.entity_id)::text)
+      Shared Hit Blocks: 5088
+      Shared Read Blocks: 3130
+      Merge Join (actual time=0.034..20.156 rows=43185 loops=1)
+        Merge Cond: ((search_flt.entity_id)::text = (search_flt_1.entity_id)::text)
+        Shared Hit Blocks: 1017
+        Index Only Scan using search_key_value_entity_idx on search (actual time=0.019..4.163 rows=43185 loops=1)
+          Index Cond: ((key = 'kind'::text) AND (value = 'api'::text))
+          Shared Hit Blocks: 478
+        Index Only Scan using search_key_value_entity_idx on search (actual time=0.013..4.287 rows=43185 loops=1)
+          Index Cond: ((key = 'spec.type'::text) AND (value = 'dataset'::text))
+          Shared Hit Blocks: 539
+      Hash (actual time=19.018..19.019 rows=17143 loops=1)
+        Shared Hit Blocks: 4071
+        Shared Read Blocks: 3130
+        Seq Scan on final_entities (actual time=5.43..14.851 rows=17143 loops=1)
+          Filter: ((final_entity IS NOT NULL) AND ((entity_id)::text > 'e'::text))
+          Rows Removed by Filter: 42857
+          Shared Hit Blocks: 4071
+          Shared Read Blocks: 3130
+Planning Time: 0.586 ms
+Execution Time: 59.297 ms
+```
+
+### Scenario 14, 14_nop_q0
+
+```text
+Limit (actual time=76.101..92.78 rows=10001 loops=1)
+  Shared Hit Blocks: 74202
+  Gather Merge (actual time=76.1..91.998 rows=10001 loops=1)
+    Shared Hit Blocks: 74202
+    Sort (actual time=63.681..63.953 rows=3411.67 loops=3)
+      Sort Key: search.value, final_entities.entity_id
+      Shared Hit Blocks: 74202
+      Nested Loop (actual time=19.503..58.624 rows=6002.33 loops=3)
+        Join Filter: (((final_entities.entity_id)::text = (search.entity_id)::text) AND (((search.value)::text > 's'::text) OR (((search.value)::text = 's'::text) AND ((final_entities.entity_id)::text > 'e'::text))))
+        Shared Hit Blocks: 74186
+        Hash Join (actual time=19.453..30.083 rows=6002.33 loops=3)
+          Hash Cond: ((search.entity_id)::text = (search_flt.entity_id)::text)
+          Shared Hit Blocks: 2156
+          Hash Join (actual time=13.842..20.732 rows=6002.33 loops=3)
+            Hash Cond: ((search.entity_id)::text = (search_flt_1.entity_id)::text)
+            Shared Hit Blocks: 1678
+            Index Only Scan using search_key_value_entity_idx on search (actual time=5.478..7.818 rows=8339.67 loops=3)
+              Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+              Filter: (((value)::text > 's'::text) OR ((value)::text = 's'::text))
+              Rows Removed by Filter: 11660
+              Shared Hit Blocks: 1138
+            Hash (actual time=8.223..8.225 rows=14395 loops=3)
+              Shared Hit Blocks: 540
+              Index Only Scan using search_key_value_entity_idx on search (actual time=0.054..3.37 rows=14395 loops=3)
+                Index Cond: ((key = 'spec.type'::text) AND (value = 'dataset'::text))
+                Shared Hit Blocks: 540
+          Hash (actual time=5.452..5.453 rows=14395 loops=3)
+            Shared Hit Blocks: 478
+            Index Only Scan using search_key_value_entity_idx on search (actual time=0.03..5.639 rows=43185 loops=1)
+              Index Cond: ((key = 'kind'::text) AND (value = 'api'::text))
+              Shared Hit Blocks: 478
+        Index Scan using final_entities_pkey on final_entities (actual time=0.004..0.004 rows=1 loops=18007)
+          Index Cond: ((entity_id)::text = (search_flt.entity_id)::text)
+          Filter: (final_entity IS NOT NULL)
+          Shared Hit Blocks: 72030
+Planning Time: 1.706 ms
+Execution Time: 93.35 ms
+```
+
+### Scenario 15, 15_perm120_q0
+
+```text
+Sort (actual time=109.587..109.604 rows=5 loops=1)
+  Sort Key: search.original_value
+  Shared Hit Blocks: 9466
+  Aggregate (actual time=109.566..109.59 rows=5 loops=1)
+    Shared Hit Blocks: 9466
+    Hash Join (actual time=67.019..103.124 rows=59987 loops=1)
+      Hash Cond: ((search.entity_id)::text = (final_entities.entity_id)::text)
+      Shared Hit Blocks: 9466
+      Hash Join (actual time=50.568..63.111 rows=59987 loops=1)
+        Hash Cond: ((search.entity_id)::text = (((search_flt.entity_id)::character varying(255)))::text)
+        Shared Hit Blocks: 2265
+        Index Only Scan using search_facets_covering_idx on search (actual time=0.032..6.112 rows=60000 loops=1)
+          Index Cond: (key = 'kind'::text)
+          Shared Hit Blocks: 649
+        Hash (actual time=50.527..50.54 rows=13 loops=1)
+          Shared Hit Blocks: 1616
+          Unique (actual time=50.499..50.516 rows=13 loops=1)
+            Shared Hit Blocks: 1616
+            Sort (actual time=50.496..50.509 rows=13 loops=1)
+              Sort Key: ((search_flt.entity_id)::character varying(255)) COLLATE "C"
+              Shared Hit Blocks: 1616
+              Append (actual time=27.496..50.474 rows=13 loops=1)
+                Shared Hit Blocks: 1616
+                SetOp (actual time=27.494..38.009 rows=5 loops=1)
+                  Shared Hit Blocks: 974
+                  Sort (actual time=0.186..0.219 rows=594 loops=1)
+                    Sort Key: ((search_flt.entity_id)::character varying(255)) COLLATE "C"
+                    Shared Hit Blocks: 17
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.015..0.074 rows=594 loops=1)
+                      Index Cond: (key = 'metadata.annotations.example.com/readers'::text)
+                      Shared Hit Blocks: 17
+                  Unique (actual time=22.514..32.974 rows=59248 loops=1)
+                    Shared Hit Blocks: 957
+                    Sort (actual time=22.51..25.018 rows=59837 loops=1)
+                      Sort Key: ((search_flt_1.entity_id)::character varying(255)) COLLATE "C"
+                      Shared Hit Blocks: 957
+                      Append (actual time=0.252..13.922 rows=60089 loops=1)
+                        Shared Hit Blocks: 957
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.251..10.077 rows=59500 loops=1)
+                          Index Cond: ((key = 'relations.ownedby'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                          Shared Hit Blocks: 940
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.289..0.403 rows=589 loops=1)
+                          Index Cond: ((key = 'metadata.annotations.example.com/readers'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                          Shared Hit Blocks: 17
+                SetOp (actual time=5.673..5.675 rows=7 loops=1)
+                  Shared Hit Blocks: 333
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.047..0.049 rows=14 loops=1)
+                    Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                    Shared Hit Blocks: 5
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.018..2.999 rows=30000 loops=1)
+                    Index Cond: ((key = 'spec.custom'::text) AND (value = 'x'::text))
+                    Shared Hit Blocks: 328
+                SetOp (actual time=6.774..6.777 rows=1 loops=1)
+                  Shared Hit Blocks: 309
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.022..0.024 rows=14 loops=1)
+                    Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                    Shared Hit Blocks: 5
+                  SetOp (actual time=6.211..6.499 rows=3001 loops=1)
+                    Shared Hit Blocks: 304
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.017..1.236 rows=12001 loops=1)
+                      Index Cond: (key = 'spec.b'::text)
+                      Shared Hit Blocks: 135
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.017..1.5 rows=15000 loops=1)
+                      Index Cond: (key = 'spec.a'::text)
+                      Shared Hit Blocks: 169
+      Hash (actual time=16.381..16.382 rows=60000 loops=1)
+        Shared Hit Blocks: 7201
+        Seq Scan on final_entities (actual time=1.163..8.225 rows=60000 loops=1)
+          Filter: (final_entity IS NOT NULL)
+          Shared Hit Blocks: 7201
+Planning Time: 1.197 ms
+Execution Time: 109.775 ms
+```
+
+### Scenario 16, 16_perm120_q0
+
+```text
+Sort (actual time=87.72..87.741 rows=90 loops=1)
+  Sort Key: search.original_value
+  Shared Hit Blocks: 9677
+  Aggregate (actual time=87.624..87.656 rows=90 loops=1)
+    Shared Hit Blocks: 9677
+    Hash Join (actual time=82.22..86.488 rows=12000 loops=1)
+      Hash Cond: ((search.entity_id)::text = (final_entities.entity_id)::text)
+      Shared Hit Blocks: 9677
+      Index Only Scan using search_facets_covering_idx on search (actual time=0.015..4.976 rows=60000 loops=1)
+        Index Cond: (key = 'spec.type'::text)
+        Shared Hit Blocks: 738
+      Hash (actual time=73.591..73.607 rows=12000 loops=1)
+        Shared Hit Blocks: 8939
+        Hash Join (actual time=56.023..71.448 rows=12000 loops=1)
+          Hash Cond: ((final_entities.entity_id)::text = (((search_flt.entity_id)::character varying(255)))::text)
+          Shared Hit Blocks: 8939
+          Seq Scan on final_entities (actual time=1.191..8.059 rows=60000 loops=1)
+            Filter: (final_entity IS NOT NULL)
+            Shared Hit Blocks: 7201
+          Hash (actual time=54.804..54.817 rows=12000 loops=1)
+            Shared Hit Blocks: 1738
+            SetOp (actual time=52.864..53.64 rows=12000 loops=1)
+              Shared Hit Blocks: 1738
+              Index Only Scan using search_key_value_entity_idx on search (actual time=0.026..1.209 rows=12001 loops=1)
+                Index Cond: ((key = 'kind'::text) AND (value = 'component'::text))
+                Shared Hit Blocks: 122
+              Unique (actual time=49.885..49.898 rows=13 loops=1)
+                Shared Hit Blocks: 1616
+                Sort (actual time=49.882..49.892 rows=13 loops=1)
+                  Sort Key: ((search_flt_1.entity_id)::character varying(255)) COLLATE "C"
+                  Shared Hit Blocks: 1616
+                  Append (actual time=25.864..49.861 rows=13 loops=1)
+                    Shared Hit Blocks: 1616
+                    SetOp (actual time=25.862..37.476 rows=5 loops=1)
+                      Shared Hit Blocks: 974
+                      Sort (actual time=0.226..0.255 rows=594 loops=1)
+                        Sort Key: ((search_flt_1.entity_id)::character varying(255)) COLLATE "C"
+                        Shared Hit Blocks: 17
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.022..0.091 rows=594 loops=1)
+                          Index Cond: (key = 'metadata.annotations.example.com/readers'::text)
+                          Shared Hit Blocks: 17
+                      Unique (actual time=22.163..32.389 rows=59248 loops=1)
+                        Shared Hit Blocks: 957
+                        Sort (actual time=22.159..24.858 rows=59837 loops=1)
+                          Sort Key: ((search_flt_2.entity_id)::character varying(255)) COLLATE "C"
+                          Shared Hit Blocks: 957
+                          Append (actual time=0.273..13.786 rows=60089 loops=1)
+                            Shared Hit Blocks: 957
+                            Index Only Scan using search_key_value_entity_idx on search (actual time=0.273..9.855 rows=59500 loops=1)
+                              Index Cond: ((key = 'relations.ownedby'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                              Shared Hit Blocks: 940
+                            Index Only Scan using search_key_value_entity_idx on search (actual time=0.325..0.441 rows=589 loops=1)
+                              Index Cond: ((key = 'metadata.annotations.example.com/readers'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                              Shared Hit Blocks: 17
+                    SetOp (actual time=5.623..5.625 rows=7 loops=1)
+                      Shared Hit Blocks: 333
+                      Index Only Scan using search_key_value_entity_idx on search (actual time=0.046..0.047 rows=14 loops=1)
+                        Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                        Shared Hit Blocks: 5
+                      Index Only Scan using search_key_value_entity_idx on search (actual time=0.019..3.041 rows=30000 loops=1)
+                        Index Cond: ((key = 'spec.custom'::text) AND (value = 'x'::text))
+                        Shared Hit Blocks: 328
+                    SetOp (actual time=6.743..6.746 rows=1 loops=1)
+                      Shared Hit Blocks: 309
+                      Index Only Scan using search_key_value_entity_idx on search (actual time=0.027..0.029 rows=14 loops=1)
+                        Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                        Shared Hit Blocks: 5
+                      SetOp (actual time=6.092..6.435 rows=3001 loops=1)
+                        Shared Hit Blocks: 304
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.014..1.171 rows=12001 loops=1)
+                          Index Cond: (key = 'spec.b'::text)
+                          Shared Hit Blocks: 135
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.021..1.445 rows=15000 loops=1)
+                          Index Cond: (key = 'spec.a'::text)
+                          Shared Hit Blocks: 169
+Planning Time: 1.489 ms
+Execution Time: 87.916 ms
+```
+
+### Scenario 17, 17_perm120_q0
+
+```text
+Aggregate (actual time=61.853..61.956 rows=36 loops=1)
+  Shared Hit Blocks: 3989
+  Sort (actual time=61.842..61.887 rows=589 loops=1)
+    Sort Key: search.original_value
+    Shared Hit Blocks: 3989
+    Nested Loop (actual time=58.088..61.382 rows=589 loops=1)
+      Shared Hit Blocks: 3989
+      Merge Join (actual time=58.05..58.267 rows=589 loops=1)
+        Merge Cond: ((search.entity_id)::text = (((search_flt.entity_id)::character varying(255)))::text)
+        Shared Hit Blocks: 1633
+        Sort (actual time=0.459..0.515 rows=594 loops=1)
+          Sort Key: search.entity_id
+          Shared Hit Blocks: 17
+          Index Only Scan using search_facets_covering_idx on search (actual time=0.018..0.081 rows=594 loops=1)
+            Index Cond: (key = 'metadata.annotations.example.com/readers'::text)
+            Shared Hit Blocks: 17
+        Sort (actual time=57.584..57.6 rows=13 loops=1)
+          Sort Key: ((search_flt.entity_id)::character varying(255))
+          Shared Hit Blocks: 1616
+          Unique (actual time=57.566..57.584 rows=13 loops=1)
+            Shared Hit Blocks: 1616
+            Sort (actual time=57.563..57.576 rows=13 loops=1)
+              Sort Key: ((search_flt.entity_id)::character varying(255)) COLLATE "C"
+              Shared Hit Blocks: 1616
+              Append (actual time=29.97..57.546 rows=13 loops=1)
+                Shared Hit Blocks: 1616
+                SetOp (actual time=29.969..42.773 rows=5 loops=1)
+                  Shared Hit Blocks: 974
+                  Sort (actual time=0.202..0.24 rows=594 loops=1)
+                    Sort Key: ((search_flt.entity_id)::character varying(255)) COLLATE "C"
+                    Shared Hit Blocks: 17
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.018..0.084 rows=594 loops=1)
+                      Index Cond: (key = 'metadata.annotations.example.com/readers'::text)
+                      Shared Hit Blocks: 17
+                  Unique (actual time=25.318..37.023 rows=59248 loops=1)
+                    Shared Hit Blocks: 957
+                    Sort (actual time=25.313..28.414 rows=59837 loops=1)
+                      Sort Key: ((search_flt_1.entity_id)::character varying(255)) COLLATE "C"
+                      Shared Hit Blocks: 957
+                      Append (actual time=0.274..15.882 rows=60089 loops=1)
+                        Shared Hit Blocks: 957
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.274..11.281 rows=59500 loops=1)
+                          Index Cond: ((key = 'relations.ownedby'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                          Shared Hit Blocks: 940
+                        Index Only Scan using search_key_value_entity_idx on search (actual time=0.418..0.57 rows=589 loops=1)
+                          Index Cond: ((key = 'metadata.annotations.example.com/readers'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                          Shared Hit Blocks: 17
+                SetOp (actual time=5.675..5.677 rows=7 loops=1)
+                  Shared Hit Blocks: 333
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.051..0.053 rows=14 loops=1)
+                    Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                    Shared Hit Blocks: 5
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.018..2.997 rows=30000 loops=1)
+                    Index Cond: ((key = 'spec.custom'::text) AND (value = 'x'::text))
+                    Shared Hit Blocks: 328
+                SetOp (actual time=9.079..9.081 rows=1 loops=1)
+                  Shared Hit Blocks: 309
+                  Index Only Scan using search_key_value_entity_idx on search (actual time=0.017..0.018 rows=14 loops=1)
+                    Index Cond: ((key = 'kind'::text) AND (value = 'template'::text))
+                    Shared Hit Blocks: 5
+                  SetOp (actual time=7.927..8.549 rows=3001 loops=1)
+                    Shared Hit Blocks: 304
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.014..1.433 rows=12001 loops=1)
+                      Index Cond: (key = 'spec.b'::text)
+                      Shared Hit Blocks: 135
+                    Index Only Scan using search_key_value_entity_idx on search (actual time=0.035..2.097 rows=15000 loops=1)
+                      Index Cond: (key = 'spec.a'::text)
+                      Shared Hit Blocks: 169
+      Index Scan using final_entities_pkey on final_entities (actual time=0.005..0.005 rows=1 loops=589)
+        Index Cond: ((entity_id)::text = (search.entity_id)::text)
+        Filter: (final_entity IS NOT NULL)
+        Shared Hit Blocks: 2356
+Planning Time: 1.652 ms
+Execution Time: 62.097 ms
+```
+
+### Scenario 18, 18_perm120_q0
+
+```text
+Sort (actual time=85.22..85.228 rows=3 loops=1)
+  Sort Key: search.original_value
+  Shared Hit Blocks: 8807
+  Aggregate (actual time=85.198..85.212 rows=3 loops=1)
+    Shared Hit Blocks: 8807
+    Hash Join (actual time=83.451..85.126 rows=495 loops=1)
+      Hash Cond: ((search.entity_id)::text = (final_entities.entity_id)::text)
+      Shared Hit Blocks: 8807
+      Hash Join (actual time=66.133..67.43 rows=495 loops=1)
+        Hash Cond: ((((search_flt.entity_id)::character varying(255)))::text = (search.entity_id)::text)
+        Shared Hit Blocks: 1606
+        Unique (actual time=22.696..33.531 rows=59505 loops=1)
+          Shared Hit Blocks: 957
+          Sort (actual time=22.69..25.351 rows=60094 loops=1)
+            Sort Key: ((search_flt.entity_id)::character varying(255)) COLLATE "C"
+            Shared Hit Blocks: 957
+            Append (actual time=0.32..14.011 rows=60094 loops=1)
+              Shared Hit Blocks: 957
+              Index Only Scan using search_key_value_entity_idx on search (actual time=0.318..10.159 rows=59500 loops=1)
+                Index Cond: ((key = 'relations.ownedby'::text) AND (value = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[])))
+                Shared Hit Blocks: 940
+              Index Only Scan using search_key_value_entity_idx on search (actual time=0.026..0.093 rows=594 loops=1)
+                Index Cond: (key = 'metadata.annotations.example.com/readers'::text)
+                Shared Hit Blocks: 17
+        Hash (actual time=15.12..15.122 rows=60000 loops=1)
+          Shared Hit Blocks: 649
+          Index Only Scan using search_facets_covering_idx on search (actual time=0.036..5.992 rows=60000 loops=1)
+            Index Cond: (key = 'kind'::text)
+            Shared Hit Blocks: 649
+      Hash (actual time=17.27..17.271 rows=60000 loops=1)
+        Shared Hit Blocks: 7201
+        Seq Scan on final_entities (actual time=1.294..8.958 rows=60000 loops=1)
+          Filter: (final_entity IS NOT NULL)
+          Shared Hit Blocks: 7201
+Planning Time: 0.922 ms
+Execution Time: 85.364 ms
+```
+
+### Scenario 19, 19_perm120_q0
+
+```text
+Limit (actual time=0.151..0.416 rows=21 loops=1)
+  Shared Hit Blocks: 153
+  Nested Loop (actual time=0.15..0.413 rows=21 loops=1)
+    Shared Hit Blocks: 153
+    Index Only Scan using search_key_value_entity_idx on search (actual time=0.013..0.015 rows=21 loops=1)
+      Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+      Shared Hit Blocks: 5
+    Memoize (actual time=0.019..0.019 rows=1 loops=21)
+      Shared Hit Blocks: 148
+      Index Scan using final_entities_pkey on final_entities (actual time=0.015..0.015 rows=1 loops=21)
+        Index Cond: ((entity_id)::text = (search.entity_id)::text)
+        Filter: ((final_entity IS NOT NULL) AND (EXISTS(SubPlan 1) OR EXISTS(SubPlan 3)))
+        Shared Hit Blocks: 148
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.009..0.009 rows=1 loops=21)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'kind'::text) AND (value = ANY ('{component,api,resource,subcomponent}'::text[])))
+          Shared Hit Blocks: 64
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0..0 rows=0 loops=0)
+          Index Cond: ((entity_id = (final_entities.entity_id)::text) AND (key = 'relations.ownedby'::text))
+          Filter: (((value)::text || ''::text) = ANY ('{group:default/team-a,group:default/team-0,group:default/team-1,group:default/team-2,group:default/team-3,group:default/team-4,group:default/team-5,group:default/team-6,group:default/team-7,group:default/team-8,group:default/team-9,group:default/team-10,group:default/team-11,group:default/team-12,group:default/team-13,group:default/team-14,group:default/team-15,group:default/team-16,group:default/team-17,group:default/team-18,group:default/team-19,group:default/team-20,group:default/team-21,group:default/team-22,group:default/team-23,group:default/team-24,group:default/team-25,group:default/team-26,group:default/team-27,group:default/team-28,group:default/team-29,group:default/team-30,group:default/team-31,group:default/team-32,group:default/team-33,group:default/team-34,group:default/team-35,group:default/team-36,group:default/team-37,group:default/team-38,group:default/team-39,group:default/team-40,group:default/team-41,group:default/team-42,group:default/team-43,group:default/team-44,group:default/team-45,group:default/team-46,group:default/team-47,group:default/team-48,group:default/team-49,group:default/team-50,group:default/team-51,group:default/team-52,group:default/team-53,group:default/team-54,group:default/team-55,group:default/team-56,group:default/team-57,group:default/team-58,group:default/team-59,group:default/team-60,group:default/team-61,group:default/team-62,group:default/team-63,group:default/team-64,group:default/team-65,group:default/team-66,group:default/team-67,group:default/team-68,group:default/team-69,group:default/team-70,group:default/team-71,group:default/team-72,group:default/team-73,group:default/team-74,group:default/team-75,group:default/team-76,group:default/team-77,group:default/team-78,group:default/team-79,group:default/team-80,group:default/team-81,group:default/team-82,group:default/team-83,group:default/team-84,group:default/team-85,group:default/team-86,group:default/team-87,group:default/team-88,group:default/team-89,group:default/team-90,group:default/team-91,group:default/team-92,group:default/team-93,group:default/team-94,group:default/team-95,group:default/team-96,group:default/team-97,group:default/team-98,group:default/team-99,group:default/team-100,group:default/team-101,group:default/team-102,group:default/team-103,group:default/team-104,group:default/team-105,group:default/team-106,group:default/team-107,group:default/team-108,group:default/team-109,group:default/team-110,group:default/team-111,group:default/team-112,group:default/team-113,group:default/team-114,group:default/team-115,group:default/team-116,group:default/team-117,group:default/team-118}'::text[]))
+Planning Time: 0.453 ms
+Execution Time: 0.449 ms
+```
+
+### Scenario 20, 20_nop_q0
+
+```text
+Limit (actual time=33.288..37.883 rows=21 loops=1)
+  Shared Hit Blocks: 5155
+  Gather Merge (actual time=33.285..37.875 rows=21 loops=1)
+    Shared Hit Blocks: 5155
+    Nested Loop (actual time=3.022..6.178 rows=14.67 loops=3)
+      Shared Hit Blocks: 5155
+      Nested Loop (actual time=2.984..5.926 rows=14.67 loops=3)
+        Shared Hit Blocks: 4977
+        Index Only Scan using search_key_value_entity_idx on search (actual time=2.725..2.89 rows=476 loops=3)
+          Index Cond: ((key = 'metadata.name'::text) AND (value IS NOT NULL))
+          Filter: (((value)::text > 't'::text) OR ((value)::text = 't'::text))
+          Rows Removed by Filter: 11660
+          Shared Hit Blocks: 688
+        Index Only Scan using search_entity_key_value_idx on search (actual time=0.006..0.006 rows=0.03 loops=1428)
+          Index Cond: ((entity_id = (search.entity_id)::text) AND (key = 'kind'::text) AND (value = 'group'::text))
+          Shared Hit Blocks: 4289
+      Index Scan using final_entities_pkey on final_entities (actual time=0.016..0.016 rows=1 loops=44)
+        Index Cond: ((entity_id)::text = (search.entity_id)::text)
+        Filter: ((final_entity IS NOT NULL) AND (((search.value)::text > 't'::text) OR (((search.value)::text = 't'::text) AND ((entity_id)::text > 'e'::text))))
+        Shared Hit Blocks: 178
+Planning Time: 1.234 ms
+Execution Time: 37.973 ms
+```
+
+### Scenario 21, 21_nop_q0
+
+```text
+Limit (actual time=178.057..191.789 rows=10001 loops=1)
+  Shared Hit Blocks: 13199
+  Index Scan using final_entities_pkey on final_entities (actual time=76.992..90.014 rows=10001 loops=1)
+    Filter: ((final_entity IS NOT NULL) AND ((ANY ((entity_id)::text = (hashed SubPlan 2).col1)) OR (ANY ((entity_id)::text = (hashed SubPlan 4).col1))))
+    Rows Removed by Filter: 2478
+    Shared Hit Blocks: 13199
+    Index Only Scan using search_key_value_entity_idx on search (actual time=21.09..21.768 rows=4638 loops=1)
+      Index Cond: ((key = 'spec.type'::text) AND (value = ANY ('{type-0,type-1,type-2,type-3,type-4,type-5,type-6,type-7,type-8,type-9,type-10,type-11,type-12,type-13,type-14,type-15,type-16,type-17,type-18,type-19,type-20,type-21,type-22,type-23,type-24,type-25,type-26,type-27,type-28,type-29}'::text[])))
+      Shared Hit Blocks: 85
+    Index Only Scan using search_key_value_entity_idx on search (actual time=26.243..30.851 rows=43185 loops=1)
+      Index Cond: ((key = 'kind'::text) AND (value = 'api'::text))
+      Shared Hit Blocks: 478
+Planning Time: 0.521 ms
+Execution Time: 193.521 ms
+```

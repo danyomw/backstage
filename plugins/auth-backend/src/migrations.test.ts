@@ -16,6 +16,7 @@
 
 import { Knex } from 'knex';
 import { TestDatabases } from '@backstage/backend-test-utils';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 import fs from 'node:fs';
 
 const migrationsDir = `${__dirname}/../migrations`;
@@ -133,15 +134,18 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
     expect(updated_at).toEqual(exp);
     expect(created_at).toBeDefined();
 
-    await knex
-      .insert({
-        user_entity_ref: 'user:default/backstage-user',
-        user_info,
-        updated_at: knex.fn.now(),
-      })
-      .into('user_info')
-      .onConflict(['user_entity_ref'])
-      .merge();
+    await upsertDatabaseRows({
+      knex,
+      table: 'user_info',
+      rows: [
+        {
+          user_entity_ref: 'user:default/backstage-user',
+          user_info,
+          updated_at: knex.fn.now(),
+        },
+      ],
+      conflictColumns: ['user_entity_ref'],
+    });
 
     await knex
       .insert({

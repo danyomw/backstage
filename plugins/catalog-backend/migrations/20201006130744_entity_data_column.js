@@ -31,7 +31,9 @@ exports.up = async function up(knex) {
     // apiVersion and kind should not contain any JSON unsafe chars, and both
     // metadata and spec are already valid serialized JSON
     data: knex.raw(
-      `'{"apiVersion":"' || ?? || '","kind":"' || ?? || '","metadata":' || ?? || COALESCE(',"spec":' || ??, '') || '}'`,
+      knex.client.config.client === 'mssql'
+        ? `'{"apiVersion":"' + ?? + '","kind":"' + ?? + '","metadata":' + ?? + COALESCE(',"spec":' + ??, '') + '}'`
+        : `'{"apiVersion":"' || ?? || '","kind":"' || ?? || '","metadata":' || ?? || COALESCE(',"spec":' || ??, '') || '}'`,
       ['api_version', 'kind', 'metadata', 'spec'],
     ),
   });

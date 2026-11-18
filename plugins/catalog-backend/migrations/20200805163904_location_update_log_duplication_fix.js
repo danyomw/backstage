@@ -20,13 +20,17 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   return knex.schema
     .raw('DROP VIEW location_update_log_latest;')
     .dropTable('location_update_log')
     .createTable('location_update_log', table => {
       table.bigIncrements('id').primary(); // instead of uuid, so we can MAX it
       table.enum('status', ['success', 'fail']).notNullable();
-      table.dateTime('created_at').defaultTo(knex.fn.now()).notNullable();
+      table.dateTime('created_at').defaultTo(now).notNullable();
       table.string('message');
       table
         .uuid('location_id')
@@ -46,8 +50,11 @@ exports.up = function up(knex) {
       ) t2
       ON t1.location_id = t2.location_id
       AND t1.id = t2.MAXID
-      GROUP BY t1.location_id, t1.id
-      ORDER BY created_at DESC;
+      ${
+        knex.client.config.client === 'mssql'
+          ? ''
+          : 'GROUP BY t1.location_id, t1.id ORDER BY created_at DESC'
+      };
     `);
 };
 
@@ -55,13 +62,17 @@ exports.up = function up(knex) {
  * @param {import('knex').Knex} knex
  */
 exports.down = function down(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   return knex.schema
     .raw('DROP VIEW location_update_log_latest;')
     .dropTable('location_update_log')
     .createTable('location_update_log', table => {
       table.uuid('id').primary();
       table.enum('status', ['success', 'fail']).notNullable();
-      table.dateTime('created_at').defaultTo(knex.fn.now()).notNullable();
+      table.dateTime('created_at').defaultTo(now).notNullable();
       table.string('message');
       table
         .uuid('location_id')
@@ -81,7 +92,10 @@ exports.down = function down(knex) {
       ) t2
       ON t1.location_id = t2.location_id
       AND t1.created_at = t2.MAXDATE
-      GROUP BY t1.location_id, t1.id
-      ORDER BY created_at DESC;
+      ${
+        knex.client.config.client === 'mssql'
+          ? ''
+          : 'GROUP BY t1.location_id, t1.id ORDER BY created_at DESC'
+      };
     `);
 };

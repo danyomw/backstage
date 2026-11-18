@@ -20,6 +20,10 @@
  * @param { import("knex").Knex } knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.createTable('scaffolder_task_workspaces', table => {
     table
       .string('task_id')
@@ -35,7 +39,7 @@ exports.up = async function up(knex) {
     table
       .timestamp('created_at', { useTz: true })
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('When the workspace was serialized');
   });
 

@@ -49,7 +49,7 @@ import { EventParams, EventsService } from '@backstage/plugin-events-node';
 import { DateTime } from 'luxon';
 import { CATALOG_CONFLICTS_TOPIC } from '../constants';
 import { CatalogConflictEventPayload } from '../catalog/types';
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, getDatabaseNow } from '@backstage/backend-plugin-api';
 import { MetricsService } from '@backstage/backend-plugin-api/alpha';
 
 // The number of items that are sent per batch to the database layer, when
@@ -187,7 +187,7 @@ export class DefaultProcessingDatabase implements ProcessingDatabase {
     request: { processBatchSize: number },
   ): Promise<GetProcessableEntitiesResult> {
     const knex = maybeTx as Knex.Transaction | Knex;
-    const useLocking = ['mysql', 'mysql2', 'pg'].includes(
+    const useLocking = ['mysql', 'mysql2', 'pg', 'mssql'].includes(
       knex.client.config.client,
     );
 
@@ -201,6 +201,10 @@ export class DefaultProcessingDatabase implements ProcessingDatabase {
         return tx.raw(`datetime('now', ?)`, [`${refreshInterval} seconds`]);
       } else if (tx.client.config.client.includes('mysql')) {
         return tx.raw(`now() + interval ${refreshInterval} second`);
+      } else if (tx.client.config.client === 'mssql') {
+        return tx.raw('DATEADD(second, ?, SYSUTCDATETIME())', [
+          refreshInterval,
+        ]);
       }
       return tx.raw(`now() + interval '${refreshInterval} seconds'`);
     };
@@ -220,11 +224,15 @@ export class DefaultProcessingDatabase implements ProcessingDatabase {
           'location_key',
           'next_update_at',
         ])
-        .where('next_update_at', '<=', tx.fn.now())
+        .where('next_update_at', '<=', getDatabaseNow(tx))
         .limit(request.processBatchSize)
         .orderBy('next_update_at', 'asc')
         .modify(qb => {
-          if (useLocking) {
+          if (tx.client.config.client === 'mssql') {
+            qb.from(
+              tx.raw('?? WITH (UPDLOCK, READPAST, ROWLOCK)', ['refresh_state']),
+            );
+          } else if (useLocking) {
             qb.forUpdate().skipLocked();
           }
         });

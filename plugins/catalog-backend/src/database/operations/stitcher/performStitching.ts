@@ -32,7 +32,11 @@ import { markDeferredStitchCompleted } from './markDeferredStitchCompleted';
 import { markDeferredStitchFailed } from './markDeferredStitchFailed';
 import { syncSearchRows } from './syncSearchRows';
 import { StitchLeaseExpiresAt } from './getDeferredStitchableEntities';
-import { LoggerService } from '@backstage/backend-plugin-api';
+import {
+  LoggerService,
+  getDatabaseNow,
+  upsertDatabaseRows,
+} from '@backstage/backend-plugin-api';
 import { retryOnDeadlock } from '../../util';
 import { assignGeneration } from './assignGeneration';
 
@@ -256,43 +260,65 @@ export async function performStitching(options: {
             if (!ticketValid) return 'abandoned' as const;
           }
           // Knex's typed insert overload excludes raw INSERT SELECT bodies.
-          let upsert = tx('final_entities')
-            .insert(
-              !isPostgres
-                ? {
-                    entity_id: entityId,
-                    entity_ref: entityRef,
-                    final_entity: JSON.stringify(entity),
-                    hash,
-                    last_updated_at: tx.fn.now(),
-                  }
-                : tx.raw(
-                    '(entity_id, entity_ref, final_entity, hash, last_updated_at) ' +
-                      'select ?, ?, ?, ?, CURRENT_TIMESTAMP ' +
-                      'where exists (select 1 from stitch_queue where entity_ref = ? and stitch_ticket = ?)',
-                    [
-                      entityId,
-                      entityRef,
-                      JSON.stringify(entity),
-                      hash,
-                      entityRef,
-                      stitchTicket,
-                    ],
-                  ),
-            )
-            .onConflict('entity_id')
-            .merge(['final_entity', 'hash', 'last_updated_at']);
-
-          if (!isMySQL) {
-            upsert = upsert.where(
-              tx.raw(
+          if (tx.client.config.client === 'mssql') {
+            await upsertDatabaseRows({
+              knex: tx,
+              table: 'final_entities',
+              rows: [
+                {
+                  entity_id: entityId,
+                  entity_ref: entityRef,
+                  final_entity: JSON.stringify(entity),
+                  hash,
+                  last_updated_at: getDatabaseNow(tx),
+                },
+              ],
+              conflictColumns: ['entity_id'],
+              update: ['final_entity', 'hash', 'last_updated_at'],
+              where: tx.raw(
                 'exists (select 1 from stitch_queue where entity_ref = ? and stitch_ticket = ?)',
                 [entityRef, stitchTicket],
               ),
-            );
-          }
+            });
+          } else {
+            let upsert = tx('final_entities')
+              .insert(
+                !isPostgres
+                  ? {
+                      entity_id: entityId,
+                      entity_ref: entityRef,
+                      final_entity: JSON.stringify(entity),
+                      hash,
+                      last_updated_at: getDatabaseNow(tx),
+                    }
+                  : tx.raw(
+                      '(entity_id, entity_ref, final_entity, hash, last_updated_at) ' +
+                        'select ?, ?, ?, ?, CURRENT_TIMESTAMP ' +
+                        'where exists (select 1 from stitch_queue where entity_ref = ? and stitch_ticket = ?)',
+                      [
+                        entityId,
+                        entityRef,
+                        JSON.stringify(entity),
+                        hash,
+                        entityRef,
+                        stitchTicket,
+                      ],
+                    ),
+              )
+              .onConflict('entity_id')
+              .merge(['final_entity', 'hash', 'last_updated_at']);
 
-          await upsert;
+            if (!isMySQL) {
+              upsert = upsert.where(
+                tx.raw(
+                  'exists (select 1 from stitch_queue where entity_ref = ? and stitch_ticket = ?)',
+                  [entityRef, stitchTicket],
+                ),
+              );
+            }
+
+            await upsert;
+          }
 
           // Verify the write took effect. On PostgreSQL, also recheck ownership
           // using this statement's fresh Read Committed snapshot: the upsert's

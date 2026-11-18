@@ -185,7 +185,7 @@ describe('MyDatabaseClass', () => {
   // "physical" databases to test against is much costlier than creating the
   // "logical" databases within them that the individual tests use.
   const databases = TestDatabases.create({
-    ids: ['POSTGRES_18', 'POSTGRES_14', 'SQLITE_3', 'MYSQL_8'],
+    ids: ['POSTGRES_18', 'POSTGRES_14', 'SQLITE_3', 'MYSQL_8', 'MSSQL_2022'],
   });
 
   // Just an example of how to conveniently bundle up the setup code
@@ -234,6 +234,12 @@ it'll take into account when present.
 - `BACKSTAGE_TEST_DATABASE_POSTGRES17_CONNECTION_STRING`
 - `BACKSTAGE_TEST_DATABASE_POSTGRES13_CONNECTION_STRING`
 - `BACKSTAGE_TEST_DATABASE_MYSQL8_CONNECTION_STRING`
+- `BACKSTAGE_TEST_DATABASE_MSSQL2022_CONNECTION_STRING`
+
+For SQL Server, use a URL such as
+`mssql://user:password@localhost:1433/master?encrypt=true&trustServerCertificate=true`.
+The login must be able to create and drop test databases. SQL Server Docker
+tests use the Microsoft SQL Server 2022 image and require an x64 Docker host.
 
 `TestDatabases` creates databases as your tests ask for them, and drops them
 when the test file finishes. In PostgreSQL, every `DROP DATABASE` waits for an

@@ -25,7 +25,7 @@ import {
 } from './types';
 import { DbRefreshStateReferencesRow, DbRefreshStateRow } from './tables';
 import { rethrowError } from './conversion';
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, getDatabaseNow } from '@backstage/backend-plugin-api';
 
 const MAX_ANCESTOR_DEPTH = 32;
 
@@ -105,7 +105,7 @@ export class DefaultCatalogDatabase implements CatalogDatabase {
 
     const updateResult = await tx<DbRefreshStateRow>('refresh_state')
       .where({ entity_ref: entityRef.toLowerCase() })
-      .update({ next_update_at: tx.fn.now() });
+      .update({ next_update_at: getDatabaseNow(tx) });
     if (updateResult === 0) {
       throw new NotFoundError(`Failed to schedule ${entityRef} for refresh`);
     }

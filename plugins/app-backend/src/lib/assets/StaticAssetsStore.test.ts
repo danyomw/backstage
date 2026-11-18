@@ -135,6 +135,8 @@ describe.each(databases.eachSupportedId())(
         hourPast = `date_sub(now(), interval 3600 second)`;
       } else if (knex.client.config.client.includes('sqlite3')) {
         hourPast = `datetime('now', '-3600 seconds')`;
+      } else if (knex.client.config.client === 'mssql') {
+        hourPast = 'DATEADD(second, -3600, SYSUTCDATETIME())';
       }
       // Rewrite modified time of "old" to be 1h in the past
       const updated = await knex('static_assets_cache')

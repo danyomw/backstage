@@ -21,6 +21,7 @@ import { randomUUID as uuid } from 'node:crypto';
 import {
   LoggerService,
   isDatabaseConflictError,
+  getDatabaseNow,
 } from '@backstage/backend-plugin-api';
 
 /**
@@ -48,8 +49,8 @@ export async function insertUnprocessedEntity(options: {
       unprocessed_hash: hash,
       errors: '',
       location_key: locationKey,
-      next_update_at: tx.fn.now(),
-      last_discovery_at: tx.fn.now(),
+      next_update_at: getDatabaseNow(tx),
+      last_discovery_at: getDatabaseNow(tx),
     });
 
     // TODO(Rugvip): only tested towards MySQL, Postgres and SQLite.
@@ -58,6 +59,8 @@ export async function insertUnprocessedEntity(options: {
     // break the ongoing transaction.
     if (tx.client.config.client.includes('pg')) {
       query = query.onConflict('entity_ref').ignore() as any; // type here does not match runtime
+    } else if (tx.client.config.client === 'mssql') {
+      query = query.returning('entity_id') as any;
     }
 
     // Postgres gives as an object with rowCount, SQLite gives us an array

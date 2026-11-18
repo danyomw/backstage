@@ -33,7 +33,12 @@ export async function assignGeneration(
       'PostgreSQL allocates publication generations in a commit-time trigger',
     );
   }
-  const castType = tx.client.config.client.includes('mysql') ? 'CHAR' : 'TEXT';
+  let castType = 'TEXT';
+  if (tx.client.config.client.includes('mysql')) {
+    castType = 'CHAR';
+  } else if (tx.client.config.client === 'mssql') {
+    castType = 'VARCHAR(32)';
+  }
 
   await tx('catalog_generation_counter')
     .where('id', 1)

@@ -31,8 +31,15 @@ exports.up = async function up(knex) {
     table.string('key').notNullable().comment('Key of a bucket value');
     table.text('value').notNullable().comment('The value');
 
-    table.primary(['user_entity_ref', 'bucket', 'key']);
+    if (knex.client.config.client !== 'mssql') {
+      table.primary(['user_entity_ref', 'bucket', 'key']);
+    }
   });
+  if (knex.client.config.client === 'mssql') {
+    await knex.raw(
+      'ALTER TABLE user_settings ADD CONSTRAINT user_settings_pkey PRIMARY KEY NONCLUSTERED (user_entity_ref, bucket, [key])',
+    );
+  }
 };
 
 /**

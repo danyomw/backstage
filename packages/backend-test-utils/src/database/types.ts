@@ -38,6 +38,7 @@ export type TestDatabaseId =
   | 'POSTGRES_11'
   | 'POSTGRES_9'
   | 'MYSQL_8'
+  | 'MSSQL_2022'
   | 'SQLITE_3';
 
 export type TestDatabaseProperties = {
@@ -118,6 +119,15 @@ export const allDatabases: Record<TestDatabaseId, TestDatabaseProperties> =
       dockerImageName: getDockerImageForName('mysql:8.4'),
       connectionStringEnvironmentVariableName:
         'BACKSTAGE_TEST_DATABASE_MYSQL8_CONNECTION_STRING',
+    },
+    MSSQL_2022: {
+      name: 'Microsoft SQL Server 2022',
+      driver: 'mssql',
+      dockerImageName: getDockerImageForName(
+        'mcr.microsoft.com/mssql/server:2022-latest',
+      ),
+      connectionStringEnvironmentVariableName:
+        'BACKSTAGE_TEST_DATABASE_MSSQL2022_CONNECTION_STRING',
     },
     SQLITE_3: {
       name: 'SQLite 3.x',

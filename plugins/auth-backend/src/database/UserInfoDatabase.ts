@@ -19,6 +19,7 @@ import { Knex } from 'knex';
 
 import { AuthDatabase } from './AuthDatabase';
 import { JsonObject } from '@backstage/types';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 
 const TABLE = 'user_info';
 
@@ -36,14 +37,18 @@ export class UserInfoDatabase {
   private constructor(private readonly client: Knex) {}
 
   async addUserInfo(userInfo: UserInfo): Promise<void> {
-    await this.client<Row>(TABLE)
-      .insert({
-        user_entity_ref: userInfo.claims.sub as string,
-        user_info: JSON.stringify(userInfo),
-        updated_at: DateTime.utc().toSQL({ includeOffset: false }),
-      })
-      .onConflict('user_entity_ref')
-      .merge();
+    await upsertDatabaseRows({
+      knex: this.client,
+      table: TABLE,
+      rows: [
+        {
+          user_entity_ref: userInfo.claims.sub as string,
+          user_info: JSON.stringify(userInfo),
+          updated_at: DateTime.utc().toSQL({ includeOffset: false }),
+        },
+      ],
+      conflictColumns: ['user_entity_ref'],
+    });
   }
 
   async getUserInfo(userEntityRef: string): Promise<UserInfo | undefined> {

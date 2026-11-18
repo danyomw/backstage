@@ -39,8 +39,11 @@ exports.up = async function up(knex) {
         ) t2
         ON t1.location_id = t2.location_id
         AND t1.id = t2.MAXID
-        GROUP BY t1.location_id, t1.id
-        ORDER BY created_at DESC;
+        ${
+          knex.client.config.client === 'mssql'
+            ? ''
+            : 'GROUP BY t1.location_id, t1.id ORDER BY created_at DESC'
+        };
       `);
   }
 };
@@ -66,8 +69,11 @@ exports.down = async function down(knex) {
         ) t2
         ON t1.location_id = t2.location_id
         AND t1.id = t2.MAXID
-        GROUP BY t1.location_id, t1.id
-        ORDER BY created_at DESC;
+        ${
+          knex.client.config.client === 'mssql'
+            ? ''
+            : 'GROUP BY t1.location_id, t1.id ORDER BY created_at DESC'
+        };
       `);
   }
 };

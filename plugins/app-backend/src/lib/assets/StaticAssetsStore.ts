@@ -22,6 +22,8 @@ import {
   DatabaseService,
   LoggerService,
   resolvePackagePath,
+  upsertDatabaseRows,
+  getDatabaseNow,
 } from '@backstage/backend-plugin-api';
 
 const migrationsDir = resolvePackagePath(import.meta.url, 'migrations');
@@ -102,7 +104,7 @@ export class StaticAssetsStore implements StaticAssetProvider {
 
     await this.#db('static_assets_cache')
       .update({
-        last_modified_at: this.#db.fn.now(),
+        last_modified_at: getDatabaseNow(this.#db),
       })
       .where('namespace', this.#namespace)
       .whereIn(
@@ -113,14 +115,19 @@ export class StaticAssetsStore implements StaticAssetProvider {
     for (const asset of added) {
       // We ignore conflicts with other nodes, it doesn't matter if someone else
       // added the same asset just before us.
-      await this.#db('static_assets_cache')
-        .insert({
-          path: asset.path,
-          content: await asset.content(),
-          namespace: this.#namespace,
-        })
-        .onConflict(['namespace', 'path'])
-        .ignore();
+      await upsertDatabaseRows({
+        knex: this.#db,
+        table: 'static_assets_cache',
+        rows: [
+          {
+            path: asset.path,
+            content: await asset.content(),
+            namespace: this.#namespace,
+          },
+        ],
+        conflictColumns: ['namespace', 'path'],
+        ignore: true,
+      });
     }
   }
 
@@ -161,6 +168,11 @@ export class StaticAssetsStore implements StaticAssetProvider {
       lastModifiedInterval = this.#db.raw(`datetime('now', ?)`, [
         `-${maxAgeSeconds} seconds`,
       ]);
+    } else if (this.#db.client.config.client === 'mssql') {
+      lastModifiedInterval = this.#db.raw(
+        'DATEADD(second, ?, SYSUTCDATETIME())',
+        [-maxAgeSeconds],
+      );
     }
     await this.#db<StaticAssetRow>('static_assets_cache')
       .where('namespace', this.#namespace)

@@ -20,6 +20,10 @@
  * @param { import("knex").Knex } knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   /**
    * Sets up the ingestions table
    */
@@ -51,7 +55,7 @@ exports.up = async function up(knex) {
     table
       .timestamp('next_action_at')
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('the moment in time at which point ingestion can begin again');
 
     table
@@ -67,7 +71,7 @@ exports.up = async function up(knex) {
     table
       .timestamp('created_at')
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('when did this ingestion actually begin');
 
     table
@@ -126,7 +130,7 @@ exports.up = async function up(knex) {
       .defaultTo(0)
       .comment('what is the order of this mark');
 
-    table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+    table.timestamp('created_at').notNullable().defaultTo(now);
   });
 
   await knex.schema.alterTable('ingestion_marks', t => {

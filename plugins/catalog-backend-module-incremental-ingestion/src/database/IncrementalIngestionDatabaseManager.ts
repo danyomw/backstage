@@ -19,6 +19,7 @@ import type { DeferredEntity } from '@backstage/plugin-catalog-node';
 import { stringifyEntityRef } from '@backstage/catalog-model';
 import { Duration } from 'luxon';
 import { randomUUID as v4 } from 'node:crypto';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 import {
   IngestionRecord,
   IngestionRecordUpdate,
@@ -39,6 +40,11 @@ export class IncrementalIngestionDatabaseManager {
     return (qb: Knex.QueryBuilder) => {
       if (isPg) {
         qb.whereRaw('?? = ANY(?)', [column, values]);
+      } else if (this.client.client.config.client === 'mssql') {
+        qb.whereRaw('?? IN (SELECT [value] FROM OPENJSON(?))', [
+          column,
+          JSON.stringify(values),
+        ]);
       } else {
         qb.whereIn(column, values);
       }
@@ -572,14 +578,28 @@ export class IncrementalIngestionDatabaseManager {
   async createMark(options: MarkRecordInsert) {
     const { record } = options;
     await this.client.transaction(async tx => {
-      await tx('ingestion_marks').insert(record);
+      await tx('ingestion_marks').insert(
+        this.client.client.config.client === 'mssql'
+          ? {
+              ...record,
+              cursor:
+                record.cursor === undefined
+                  ? undefined
+                  : JSON.stringify(record.cursor),
+            }
+          : record,
+      );
     });
   }
 
   // Handles the fact that sqlite does not support json columns; they just
   // persist the stringified data instead
   #decodeMark<T extends MarkRecord | undefined>(knex: Knex, record: T): T {
-    if (record && knex.client.config.client.includes('sqlite3')) {
+    if (
+      record &&
+      (knex.client.config.client.includes('sqlite3') ||
+        knex.client.config.client === 'mssql')
+    ) {
       return {
         ...record,
         cursor: JSON.parse(record.cursor as string),
@@ -611,17 +631,18 @@ export class IncrementalIngestionDatabaseManager {
     );
 
     await this.client.transaction(async tx => {
-      await tx('ingestion_mark_entities')
-        .insert(
-          refs.map(entityRef => ({
-            id: v4(),
-            ingestion_mark_id: markId,
-            source_key: sourceKey,
-            entity_ref: entityRef,
-          })),
-        )
-        .onConflict(['source_key', 'entity_ref'])
-        .merge(['ingestion_mark_id']);
+      await upsertDatabaseRows({
+        knex: tx,
+        table: 'ingestion_mark_entities',
+        rows: refs.map(entityRef => ({
+          id: v4(),
+          ingestion_mark_id: markId,
+          source_key: sourceKey,
+          entity_ref: entityRef,
+        })),
+        conflictColumns: ['source_key', 'entity_ref'],
+        update: ['ingestion_mark_id'],
+      });
     });
   }
 

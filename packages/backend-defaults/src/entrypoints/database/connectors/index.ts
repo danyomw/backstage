@@ -15,5 +15,6 @@
  */
 
 export { MysqlConnector } from './mysql';
+export { MssqlConnector } from './mssql';
 export { PgConnector } from './postgres';
 export { Sqlite3Connector } from './sqlite3';

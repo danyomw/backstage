@@ -20,11 +20,15 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   // Make sure to reprocess everything, to make sure that relations have a targetRef produced
   await knex('final_entities').update({ hash: '' });
   await knex('refresh_state').update({
     result_hash: '',
-    next_update_at: knex.fn.now(),
+    next_update_at: now,
   });
 };
 

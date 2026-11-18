@@ -41,6 +41,7 @@ import { EntitiesRequest } from '../catalog/types';
 import { buildEntitySearch } from '../database/operations/stitcher/buildEntitySearch';
 import { entitiesResponseToObjects } from './response';
 import { INDIRECT_IN_MIN_VALUES } from './request/longInLists';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 
 jest.setTimeout(60_000);
 
@@ -2085,8 +2086,10 @@ describe.each(databases.eachSupportedId())(
         // The UNIQUE constraint on (entity_id, key, value) prevents
         // duplicate search rows. Verify that duplicates are silently
         // rejected and the query still returns correct results.
-        await knex<DbSearchRow>('search')
-          .insert([
+        await upsertDatabaseRows({
+          knex,
+          table: 'search',
+          rows: [
             {
               entity_id: 'uid-a',
               key: 'metadata.title',
@@ -2099,9 +2102,10 @@ describe.each(databases.eachSupportedId())(
               value: 'b test entity',
               original_value: 'B Test Entity',
             },
-          ])
-          .onConflict()
-          .ignore();
+          ],
+          conflictColumns: ['entity_id', 'key', 'value'],
+          ignore: true,
+        });
 
         const catalog = new DefaultEntitiesCatalog({
           database: knex,
@@ -2576,17 +2580,20 @@ describe.each(databases.eachSupportedId())(
 
         // Attempt to insert a duplicate — the UNIQUE constraint silently
         // rejects it via ON CONFLICT IGNORE.
-        await knex<DbSearchRow>('search')
-          .insert([
+        await upsertDatabaseRows({
+          knex,
+          table: 'search',
+          rows: [
             {
               entity_id: 'uid-a',
               key: 'metadata.name',
               value: 'one',
               original_value: 'one',
             },
-          ])
-          .onConflict()
-          .ignore();
+          ],
+          conflictColumns: ['entity_id', 'key', 'value'],
+          ignore: true,
+        });
 
         const catalog = new DefaultEntitiesCatalog({
           database: knex,

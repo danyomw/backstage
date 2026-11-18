@@ -21,6 +21,7 @@
  */
 exports.up = async function up(knex) {
   const isMySQL = knex.client.config.client.includes('mysql');
+  const isMssql = knex.client.config.client === 'mssql';
 
   await knex.schema.alterTable('static_assets_cache', table => {
     // The namespace is used to allow operations on asset groups, e.g. delete all assets in a namespace
@@ -29,7 +30,7 @@ exports.up = async function up(knex) {
       .defaultTo('default')
       .comment('The namespace of the file');
 
-    if (!isMySQL) {
+    if (!isMySQL && !isMssql) {
       table.dropPrimary();
       table.primary(['namespace', 'path']);
     }
@@ -43,6 +44,17 @@ exports.up = async function up(knex) {
       'create unique index static_assets_cache_path_idx on static_assets_cache(namespace, path(254));',
     );
   }
+  if (isMssql) {
+    await knex('static_assets_cache')
+      .whereNull('namespace')
+      .update({ namespace: 'default' });
+    await knex.raw(
+      'DROP INDEX static_assets_cache_path_idx ON static_assets_cache',
+    );
+    await knex.raw(
+      'CREATE UNIQUE INDEX static_assets_cache_path_idx ON static_assets_cache(namespace, path_hash)',
+    );
+  }
 };
 
 /**
@@ -50,6 +62,7 @@ exports.up = async function up(knex) {
  */
 exports.down = async function down(knex) {
   const isMySQL = knex.client.config.client.includes('mysql');
+  const isMssql = knex.client.config.client === 'mssql';
 
   await knex
     .delete()
@@ -61,15 +74,20 @@ exports.down = async function down(knex) {
       'drop index static_assets_cache_path_idx on static_assets_cache;',
     );
   }
+  if (isMssql) {
+    await knex.raw(
+      'DROP INDEX static_assets_cache_path_idx ON static_assets_cache',
+    );
+  }
 
   await knex.schema.alterTable('static_assets_cache', table => {
-    if (!isMySQL) {
+    if (!isMySQL && !isMssql) {
       table.dropPrimary();
     }
 
     table.dropColumn('namespace');
 
-    if (!isMySQL) {
+    if (!isMySQL && !isMssql) {
       table.primary(['path']);
     }
   });
@@ -77,6 +95,11 @@ exports.down = async function down(knex) {
   if (isMySQL) {
     await knex.schema.raw(
       'create unique index static_assets_cache_path_idx on static_assets_cache(path(254));',
+    );
+  }
+  if (isMssql) {
+    await knex.raw(
+      'CREATE UNIQUE INDEX static_assets_cache_path_idx ON static_assets_cache(path_hash)',
     );
   }
 };

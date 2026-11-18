@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 import { DateTime } from 'luxon';
 
@@ -129,8 +130,8 @@ export class OfflineSessionDatabase {
         user_entity_ref: userEntityRef,
         oidc_client_id: oidcClientId ?? null,
         token_hash: tokenHash,
-        created_at: trx.fn.now(),
-        last_used_at: trx.fn.now(),
+        created_at: getDatabaseNow(trx),
+        last_used_at: getDatabaseNow(trx),
       });
     });
 
@@ -189,10 +190,12 @@ export class OfflineSessionDatabase {
       }
 
       // Update token hash atomically
-      await trx<DbOfflineSessionRow>(TABLE_NAME).where('id', id).update({
-        token_hash: newTokenHash,
-        last_used_at: trx.fn.now(),
-      });
+      await trx<DbOfflineSessionRow>(TABLE_NAME)
+        .where('id', id)
+        .update({
+          token_hash: newTokenHash,
+          last_used_at: getDatabaseNow(trx),
+        });
 
       return this.#mapRow(row);
     });

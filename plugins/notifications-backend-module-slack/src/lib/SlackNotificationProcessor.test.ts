@@ -1733,7 +1733,8 @@ describe('SlackNotificationProcessor', () => {
             }
             return Promise.resolve(undefined);
           }),
-          insert: jest.fn().mockImplementation((row: any) => {
+          insert: jest.fn().mockImplementation((input: any) => {
+            const row = Array.isArray(input) ? input[0] : input;
             lastInsertRow = row;
             store.set(storeKey(row.origin, row.scope, row.channel), row);
             return qb;
@@ -1762,6 +1763,7 @@ describe('SlackNotificationProcessor', () => {
         .fn()
         .mockImplementation(() => createQueryBuilder()) as unknown as Knex;
       (db as any).fn = { now: jest.fn().mockReturnValue(new Date()) };
+      (db as any).client = { config: { client: 'pg' } };
       return { db, store, storeKey };
     }
 

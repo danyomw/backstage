@@ -69,6 +69,30 @@ describe('isDatabaseConflictError', () => {
     ).toBe(true);
   });
 
+  it('detects SQL Server unique violations by error number', () => {
+    for (const number of [2601, 2627]) {
+      expect(
+        isDatabaseConflictError(
+          Object.assign(new Error('localized message'), {
+            code: 'EREQUEST',
+            number,
+          }),
+        ),
+      ).toBe(true);
+    }
+    expect(isDatabaseConflictError({ number: 547 })).toBe(false);
+    expect(isDatabaseConflictError({ number: 1205 })).toBe(false);
+    expect(isDatabaseConflictError({ number: '2627' })).toBe(false);
+    expect(
+      isDatabaseConflictError(
+        new AggregateError([
+          Object.assign(new Error('duplicate key'), { number: 2627 }),
+          Object.assign(new Error('statement terminated'), { number: 3621 }),
+        ]),
+      ),
+    ).toBe(true);
+  });
+
   it('ignores unrelated PostgreSQL errors', () => {
     expect(
       isDatabaseConflictError(new Error('Connection terminated unexpectedly')),

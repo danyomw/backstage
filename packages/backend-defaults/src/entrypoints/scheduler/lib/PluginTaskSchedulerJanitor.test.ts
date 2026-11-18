@@ -15,6 +15,7 @@
  */
 
 import { TestDatabases, mockServices } from '@backstage/backend-test-utils';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 import { Duration } from 'luxon';
 import waitForExpect from 'wait-for-expect';
@@ -24,10 +25,13 @@ import { PluginTaskSchedulerJanitor } from './PluginTaskSchedulerJanitor';
 import { createTestScopedSignal } from './__testUtils__/createTestScopedSignal';
 
 const insertTask = async (knex: Knex, task: DbTasksRow) => {
-  return knex<DbTasksRow>(DB_TASKS_TABLE)
-    .insert(task)
-    .onConflict('id')
-    .merge(['settings_json']);
+  return upsertDatabaseRows({
+    knex,
+    table: DB_TASKS_TABLE,
+    rows: [{ ...task }],
+    conflictColumns: ['id'],
+    update: ['settings_json'],
+  });
 };
 
 const getTask = async (knex: Knex): Promise<DbTasksRow> => {
@@ -43,6 +47,7 @@ const databases = TestDatabases.create({
     'POSTGRES_14',
     'SQLITE_3',
     'MYSQL_8',
+    'MSSQL_2022',
   ],
 });
 

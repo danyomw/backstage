@@ -69,6 +69,8 @@ exports.up = async function up(knex) {
         table.dropIndex([], 'search_entity_id_idx');
       });
     }
+  } else if (client === 'mssql') {
+    await knex.raw('DROP INDEX IF EXISTS search_entity_id_idx ON search');
   } else {
     await knex.raw('DROP INDEX IF EXISTS search_entity_id_idx');
   }
@@ -92,6 +94,16 @@ exports.down = async function down(knex) {
       await knex.schema.alterTable('search', table => {
         table.index(['entity_id'], 'search_entity_id_idx');
       });
+    }
+  } else if (client === 'mssql') {
+    const existing = await knex('sys.indexes')
+      .whereRaw("object_id = OBJECT_ID('search')")
+      .where({ name: 'search_entity_id_idx' })
+      .first();
+    if (!existing) {
+      await knex.schema.alterTable('search', table =>
+        table.index(['entity_id'], 'search_entity_id_idx'),
+      );
     }
   } else {
     await knex.raw(

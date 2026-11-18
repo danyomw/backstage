@@ -17,8 +17,12 @@
 import { Knex } from 'knex';
 import splitToChunks from 'lodash/chunk';
 import { randomUUID as uuid } from 'node:crypto';
-import { DbRefreshStateRow, DbStitchQueueRow } from '../../tables';
+import { DbRefreshStateRow } from '../../tables';
 import { retryOnDeadlock } from '../../util';
+import {
+  upsertDatabaseRows,
+  getDatabaseNow,
+} from '@backstage/backend-plugin-api';
 
 const UPDATE_CHUNK_SIZE = 100; // Smaller chunks reduce contention
 
@@ -56,17 +60,18 @@ export async function markForStitching(options: {
   for (const chunk of entityRefs) {
     await retryOnDeadlock(async () => {
       if (chunk.length > 0) {
-        await knex<DbStitchQueueRow>('stitch_queue')
-          .insert(
-            chunk.map(ref => ({
-              entity_ref: ref,
-              stitch_ticket: ticket,
-              failure_count: 0,
-              next_stitch_at: knex.fn.now(),
-            })),
-          )
-          .onConflict('entity_ref')
-          .merge(['stitch_ticket', 'failure_count']);
+        await upsertDatabaseRows({
+          knex,
+          table: 'stitch_queue',
+          rows: chunk.map(ref => ({
+            entity_ref: ref,
+            stitch_ticket: ticket,
+            failure_count: 0,
+            next_stitch_at: getDatabaseNow(knex),
+          })),
+          conflictColumns: ['entity_ref'],
+          update: ['stitch_ticket', 'failure_count'],
+        });
       }
     }, knex);
   }
@@ -79,17 +84,18 @@ export async function markForStitching(options: {
         .whereIn('entity_id', chunk);
 
       if (refreshStateRows.length > 0) {
-        await knex<DbStitchQueueRow>('stitch_queue')
-          .insert(
-            refreshStateRows.map(row => ({
-              entity_ref: row.entity_ref,
-              stitch_ticket: ticket,
-              failure_count: 0,
-              next_stitch_at: knex.fn.now(),
-            })),
-          )
-          .onConflict('entity_ref')
-          .merge(['stitch_ticket', 'failure_count']);
+        await upsertDatabaseRows({
+          knex,
+          table: 'stitch_queue',
+          rows: refreshStateRows.map(row => ({
+            entity_ref: row.entity_ref,
+            stitch_ticket: ticket,
+            failure_count: 0,
+            next_stitch_at: getDatabaseNow(knex),
+          })),
+          conflictColumns: ['entity_ref'],
+          update: ['stitch_ticket', 'failure_count'],
+        });
       }
     }, knex);
   }

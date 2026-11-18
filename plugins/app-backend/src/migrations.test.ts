@@ -56,7 +56,9 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
       last_modified_at: knex.fn.now(),
     });
 
-    await expect(knex('static_assets_cache')).resolves.toEqual([
+    await expect(
+      knex('static_assets_cache').select('path', 'content', 'last_modified_at'),
+    ).resolves.toEqual([
       {
         path: 'main.js',
         content: Buffer.from('some-script'),
@@ -87,7 +89,14 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
 
     await migrateUpOnce(knex);
 
-    await expect(knex('static_assets_cache')).resolves.toEqual([
+    await expect(
+      knex('static_assets_cache').select(
+        'path',
+        'content',
+        'last_modified_at',
+        'namespace',
+      ),
+    ).resolves.toEqual([
       {
         path: 'main.js',
         content: Buffer.from('some-script'),
@@ -103,7 +112,14 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
       last_modified_at: knex.fn.now(),
     });
 
-    await expect(knex('static_assets_cache')).resolves.toEqual([
+    await expect(
+      knex('static_assets_cache').select(
+        'path',
+        'content',
+        'last_modified_at',
+        'namespace',
+      ),
+    ).resolves.toEqual([
       {
         path: 'main.js',
         content: Buffer.from('some-script'),
@@ -120,7 +136,9 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
 
     await migrateDownOnce(knex);
 
-    await expect(knex('static_assets_cache')).resolves.toEqual([
+    await expect(
+      knex('static_assets_cache').select('path', 'content', 'last_modified_at'),
+    ).resolves.toEqual([
       {
         path: 'main.js',
         content: Buffer.from('some-script'),

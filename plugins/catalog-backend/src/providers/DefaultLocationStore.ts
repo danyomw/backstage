@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Location } from '@backstage/catalog-client';
 import { ConflictError, InputError, NotFoundError } from '@backstage/errors';
 import { Knex } from 'knex';
@@ -128,7 +129,7 @@ export class DefaultLocationStore implements LocationStore, EntityProvider {
       await this.db<DbRefreshStateRow>('refresh_state')
         .where({ entity_ref: entityRef })
         .update({
-          next_update_at: this.db.fn.now(),
+          next_update_at: getDatabaseNow(this.db),
           result_hash: '',
         });
     }

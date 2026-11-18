@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 import { DbStitchQueueRow } from '../../tables';
 import { StitchLeaseExpiresAt } from './getDeferredStitchableEntities';
@@ -41,6 +42,6 @@ export async function markDeferredStitchFailed(options: {
       .where('entity_ref', entityRef)
       .whereNot('stitch_ticket', stitchTicket)
       .where('next_stitch_at', stitchLeaseExpiresAt)
-      .update({ next_stitch_at: knex.fn.now() });
+      .update({ next_stitch_at: getDatabaseNow(knex) });
   }
 }

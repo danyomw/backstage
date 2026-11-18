@@ -41,7 +41,7 @@ async function migrateUntilBefore(knex: Knex, target: string): Promise<void> {
 jest.setTimeout(60_000);
 
 const databases = TestDatabases.create({
-  ids: ['POSTGRES_18', 'POSTGRES_14', 'SQLITE_3'],
+  ids: ['POSTGRES_18', 'POSTGRES_14', 'MSSQL_2022', 'SQLITE_3'],
 });
 
 describe.each(databases.eachSupportedId())(

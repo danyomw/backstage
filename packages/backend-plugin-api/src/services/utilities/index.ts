@@ -14,4 +14,6 @@
  * limitations under the License.
  */
 
-export { isDatabaseConflictError } from './database';
+export { isDatabaseConflictError, getDatabaseNow } from './database';
+export { upsertDatabaseRows } from './upsertDatabaseRows';
+export type { DatabaseUpsertOptions } from './upsertDatabaseRows';

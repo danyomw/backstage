@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 
 export const intervalFromNowTill = (timeoutS: number, knex: Knex) => {
   let heartbeatInterval = knex.raw(`? - interval '${timeoutS} seconds'`, [
-    knex.fn.now(),
+    getDatabaseNow(knex),
   ]);
   if (knex.client.config.client.includes('mysql')) {
     heartbeatInterval = knex.raw(
@@ -26,6 +27,10 @@ export const intervalFromNowTill = (timeoutS: number, knex: Knex) => {
   } else if (knex.client.config.client.includes('sqlite3')) {
     heartbeatInterval = knex.raw(`datetime('now', ?)`, [
       `-${timeoutS} seconds`,
+    ]);
+  } else if (knex.client.config.client === 'mssql') {
+    heartbeatInterval = knex.raw('DATEADD(second, ?, SYSUTCDATETIME())', [
+      -timeoutS,
     ]);
   }
   return heartbeatInterval;

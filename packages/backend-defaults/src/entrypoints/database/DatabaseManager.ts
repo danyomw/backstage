@@ -25,6 +25,7 @@ import {
 import { Config } from '@backstage/config';
 import { stringifyError } from '@backstage/errors';
 import { Knex } from 'knex';
+import { MssqlConnector } from './connectors/mssql';
 import { MysqlConnector } from './connectors/mysql';
 import { PgConnector } from './connectors/postgres';
 import { Sqlite3Connector } from './connectors/sqlite3';
@@ -121,7 +122,7 @@ export class DatabaseManagerImpl {
         clearInterval(this.keepaliveIntervals.get(pluginId));
         const connection = await this.databaseCache.get(pluginId);
         if (connection) {
-          if (connection.client.config.includes('sqlite3')) {
+          if (connection.client.config.client.includes('sqlite3')) {
             return; // sqlite3 does not support destroy, it hangs
           }
           await connection.destroy().catch((error: unknown) => {
@@ -286,6 +287,7 @@ export class DatabaseManager {
           'better-sqlite3': new Sqlite3Connector(databaseConfig),
           mysql: new MysqlConnector(databaseConfig, prefix),
           mysql2: new MysqlConnector(databaseConfig, prefix),
+          mssql: new MssqlConnector(databaseConfig, prefix),
         },
         options,
       ),

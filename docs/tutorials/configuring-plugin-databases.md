@@ -24,7 +24,7 @@ instances, you can set the database connection configuration on a
 [per plugin basis](#connection-configuration-per-plugin).
 
 Backstage supports all of these use cases with the `DatabaseManager` provided by
-`@backstage/backend-common`. We will now cover how to use and configure
+`@backstage/backend-defaults/database`. We will now cover how to use and configure
 Backstage's databases.
 
 ## Prerequisites
@@ -45,6 +45,12 @@ Install SQLite 3 if you intend to set it as the client:
 
 ```bash title="From your Backstage root directory"
 yarn --cwd packages/backend add better-sqlite3
+```
+
+Install `tedious` if you need Microsoft SQL Server:
+
+```shell title="From your Backstage root directory"
+yarn --cwd packages/backend add tedious
 ```
 
 From an operational perspective, you only need to install drivers for clients
@@ -153,6 +159,82 @@ backend:
         client: better-sqlite3
         connection: ':memory:'
 ```
+
+### Microsoft SQL Server
+
+Use `mssql` as the client for Microsoft SQL Server 2022 or later. The database
+service creates a separate database for each plugin. SQL Server supports the
+`database` plugin division mode.
+
+```yaml
+backend:
+  database:
+    client: mssql
+    connection:
+      server: ${MSSQL_HOST}
+      port: 1433
+      userName: ${MSSQL_USER}
+      password: ${MSSQL_PASSWORD}
+      options:
+        encrypt: true
+        trustServerCertificate: false
+```
+
+The default database names are `backstage_plugin_<pluginId>`. The service uses
+`prefix` to change this prefix. A database name in the base connection does not
+replace these plugin database names. Set an explicit database name under
+`backend.database.plugin.<pluginId>.connection.database` instead.
+
+The login needs permission to create databases when `ensureExists` is `true`,
+and each plugin needs permission to run migrations and read and write its own
+tables. For databases created by an administrator, set `ensureExists: false`
+and configure each plugin's database name:
+
+```yaml
+backend:
+  database:
+    client: mssql
+    ensureExists: false
+    connection:
+      server: ${MSSQL_HOST}
+      userName: ${MSSQL_USER}
+      password: ${MSSQL_PASSWORD}
+    plugin:
+      catalog:
+        connection:
+          database: backstage_catalog
+      auth:
+        connection:
+          database: backstage_auth
+```
+
+The service creates databases with the `Latin1_General_100_BIN2` collation so
+that catalog values and stored keys retain case-sensitive comparisons. Use
+this collation for databases that you create yourself. SQL Server database
+names can contain at most 128 characters, including the configured prefix.
+
+Connections use encryption and verify the server certificate by default. For
+a local server with a self-signed certificate, set
+`connection.options.trustServerCertificate: true`. The driver returns UUIDs
+in lower case, and Backstage stores database timestamps in UTC.
+
+You can also use a connection URL:
+
+```yaml
+backend:
+  database:
+    client: mssql
+    connection: 'mssql://user:password@localhost:1433'
+```
+
+Percent-encode special characters in the URL's user name, password, and
+database name. The URL accepts `encrypt` and `trustServerCertificate` query
+parameters with `true` or `false` values. Use the object form for other
+[Knex connection options](https://knexjs.org/guide/#configuration-options).
+
+Database-specific plugins, such as the PostgreSQL search module, still need
+their own supported database. Select another search engine or configure a
+PostgreSQL connection for the search plugin.
 
 ## Check Your Databases
 

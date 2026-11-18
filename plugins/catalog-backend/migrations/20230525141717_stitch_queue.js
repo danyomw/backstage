@@ -20,6 +20,10 @@
  * @param { import("knex").Knex } knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.alterTable('refresh_state', table => {
     table
       .dateTime('next_stitch_at')
@@ -53,16 +57,31 @@ exports.up = async function up(knex) {
     // no final entities at all
     .orWhereNull('final_entities.entity_id')
     // the final entity hash was forcibly set to something short
-    .orWhere(knex.raw('LENGTH(??) < 15', ['final_entities.hash']))
+    .orWhere(
+      knex.raw(
+        `${knex.client.config.client === 'mssql' ? 'LEN' : 'LENGTH'}(??) < 15`,
+        ['final_entities.hash'],
+      ),
+    )
     // there used to be an ongoing stitch (possibly unfinished and aborted)
-    .orWhere(knex.raw('LENGTH(??) > 0', ['final_entities.stitch_ticket']))
+    .orWhere(
+      knex.raw(
+        `${knex.client.config.client === 'mssql' ? 'LEN' : 'LENGTH'}(??) > 0`,
+        ['final_entities.stitch_ticket'],
+      ),
+    )
     // the processing output entity hash was forcibly set to something short
-    .orWhere(knex.raw('LENGTH(??) < 15', ['refresh_state.result_hash']));
+    .orWhere(
+      knex.raw(
+        `${knex.client.config.client === 'mssql' ? 'LEN' : 'LENGTH'}(??) < 15`,
+        ['refresh_state.result_hash'],
+      ),
+    );
   if (candidates.length) {
     for (let i = 0; i < candidates.length; i += 1000) {
       await knex('refresh_state')
         .update({
-          next_stitch_at: knex.fn.now(),
+          next_stitch_at: now,
           next_stitch_ticket: 'initial',
         })
         .whereIn(

@@ -15,6 +15,7 @@
  */
 
 import { Knex } from 'knex';
+import { upsertDatabaseRows } from '@backstage/backend-plugin-api';
 import {
   WorkspaceProvider,
   serializeWorkspace,
@@ -78,13 +79,18 @@ export class DatabaseWorkspaceProvider implements WorkspaceProvider {
 
     const hasLegacyWorkspaceColumn = await this.hasLegacyWorkspaceColumn();
     await this.db.transaction(async tx => {
-      await tx<RawDbTaskWorkspaceRow>('scaffolder_task_workspaces')
-        .insert({
-          task_id: options.taskId,
-          workspace,
-        })
-        .onConflict('task_id')
-        .merge(['workspace']);
+      await upsertDatabaseRows({
+        knex: tx,
+        table: 'scaffolder_task_workspaces',
+        rows: [
+          {
+            task_id: options.taskId,
+            workspace,
+          },
+        ],
+        conflictColumns: ['task_id'],
+        update: ['workspace'],
+      });
 
       if (hasLegacyWorkspaceColumn) {
         await tx('tasks')
@@ -109,10 +115,13 @@ export class DatabaseWorkspaceProvider implements WorkspaceProvider {
     }
 
     if (workspace) {
-      await this.db<RawDbTaskWorkspaceRow>('scaffolder_task_workspaces')
-        .insert({ task_id: options.taskId, workspace })
-        .onConflict('task_id')
-        .merge(['workspace']);
+      await upsertDatabaseRows({
+        knex: this.db,
+        table: 'scaffolder_task_workspaces',
+        rows: [{ task_id: options.taskId, workspace }],
+        conflictColumns: ['task_id'],
+        update: ['workspace'],
+      });
     } else {
       const row = await this.db<RawDbTaskWorkspaceRow>(
         'scaffolder_task_workspaces',
@@ -139,7 +148,7 @@ export class DatabaseWorkspaceProvider implements WorkspaceProvider {
       if (hasLegacyWorkspaceColumn) {
         await tx('tasks')
           .where({ id: options.taskId })
-          .update({ workspace: null });
+          .update({ workspace: tx.raw('NULL') });
       }
     });
   }

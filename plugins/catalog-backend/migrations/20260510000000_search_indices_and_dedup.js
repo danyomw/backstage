@@ -121,6 +121,8 @@ exports.up = async function up(knex) {
     await upPostgres(knex);
   } else if (client.includes('mysql')) {
     await upMysql(knex);
+  } else if (client === 'mssql') {
+    await upMssql(knex);
   } else {
     await upSqlite(knex);
   }
@@ -158,6 +160,19 @@ exports.down = async function down(knex) {
     await mysqlDropIndexIfExists(knex, 'search_entity_key_value_idx');
     await mysqlDropIndexIfExists(knex, 'search_key_value_entity_idx');
     await mysqlDropIndexIfExists(knex, 'search_facets_covering_idx');
+  } else if (client === 'mssql') {
+    await ensureMssqlIndex(knex, 'search_key_value_idx', ['key', 'value']);
+    await ensureMssqlIndex(knex, 'search_key_original_value_idx', [
+      'key',
+      'original_value',
+    ]);
+    for (const name of [
+      'search_entity_key_value_idx',
+      'search_key_value_entity_idx',
+      'search_facets_covering_idx',
+    ]) {
+      await dropMssqlIndex(knex, name);
+    }
   } else {
     await knex.raw(
       'CREATE INDEX IF NOT EXISTS search_key_value_idx ON search (key, value)',
@@ -172,6 +187,64 @@ exports.down = async function down(knex) {
 };
 
 exports.config = { transaction: false };
+
+/** @param {import('knex').Knex} knex */
+async function upMssql(knex) {
+  await knex.raw(`WITH duplicates AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY entity_id, [key], value ORDER BY original_value) AS duplicate_number
+    FROM search
+  ) DELETE FROM duplicates WHERE duplicate_number > 1`);
+  await ensureMssqlIndex(
+    knex,
+    'search_entity_key_value_idx',
+    ['entity_id', 'key', 'value'],
+    true,
+  );
+  await ensureMssqlIndex(knex, 'search_key_value_entity_idx', [
+    'key',
+    'value',
+    'entity_id',
+  ]);
+  await ensureMssqlIndex(
+    knex,
+    'search_facets_covering_idx',
+    ['key', 'original_value', 'entity_id'],
+    false,
+    'original_value IS NOT NULL',
+  );
+  await dropMssqlIndex(knex, 'search_key_value_idx');
+  await dropMssqlIndex(knex, 'search_key_original_value_idx');
+}
+
+/** @param {import('knex').Knex} knex @param {string} name @param {string[]} columns @param {boolean} [unique] @param {string} [predicate] */
+async function ensureMssqlIndex(
+  knex,
+  name,
+  columns,
+  unique = false,
+  predicate,
+) {
+  const existing = await knex('sys.indexes')
+    .whereRaw("object_id = OBJECT_ID('search')")
+    .where({ name })
+    .first();
+  if (existing && Boolean(existing.is_unique) === unique) return;
+  if (existing) await dropMssqlIndex(knex, name);
+  await knex.raw(
+    `CREATE ${unique ? 'UNIQUE' : ''} INDEX ?? ON search (${columns
+      .map(() => '??')
+      .join(', ')})${predicate ? ` WHERE ${predicate}` : ''}`,
+    [name, ...columns],
+  );
+}
+
+/** @param {import('knex').Knex} knex @param {string} name */
+async function dropMssqlIndex(knex, name) {
+  await knex.raw(
+    "IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('search') AND name = ?) DROP INDEX ?? ON search",
+    [name, name],
+  );
+}
 
 // ---------------------------------------------------------------------------
 // PostgreSQL

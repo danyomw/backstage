@@ -33,7 +33,7 @@ exports.up = async function up(knex) {
     ) t2
     ON t1.location_id = t2.location_id
     AND t1.created_at = t2.MAXDATE
-    ORDER BY created_at DESC;
+    ${knex.client.config.client === 'mssql' ? '' : 'ORDER BY created_at DESC'};
   `);
 };
 

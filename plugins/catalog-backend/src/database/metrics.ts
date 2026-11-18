@@ -104,6 +104,9 @@ function entityRefKindExpression(knex: Knex): Knex.Raw {
   if (client.includes('mysql')) {
     return knex.raw(`substring_index(entity_ref, ':', 1)`);
   }
+  if (client === 'mssql') {
+    return knex.raw("SUBSTRING(entity_ref, 1, CHARINDEX(':', entity_ref) - 1)");
+  }
   // sqlite (better-sqlite3, sqlite3)
   return knex.raw(`substr(entity_ref, 1, instr(entity_ref, ':') - 1)`);
 }

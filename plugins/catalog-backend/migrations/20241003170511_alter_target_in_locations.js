@@ -32,7 +32,11 @@ exports.up = async function up(knex) {
  */
 exports.down = async function down(knex) {
   const oversizedEntries = await knex('locations').where(
-    knex.raw('LENGTH(target) > 255'),
+    knex.raw(
+      knex.client.config.client === 'mssql'
+        ? 'DATALENGTH(target) > 510'
+        : 'LENGTH(target) > 255',
+    ),
   );
 
   if (oversizedEntries.length > 0) {

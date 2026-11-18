@@ -49,7 +49,7 @@ createBackendPlugin({
 ## Configuring connection pools
 
 Each plugin that calls `getClient()` receives a Knex connection pool. You can
-configure the pool through `backend.database.knexConfig`. PostgreSQL and MySQL
+configure the pool through `backend.database.knexConfig`. PostgreSQL, MySQL, and SQL Server
 pools default the minimum pool size to zero, as
 [recommended by Knex](https://knexjs.org/guide/#pool), and the database service
 does not issue periodic queries to keep idle pools active. This allows Knex to
@@ -78,3 +78,41 @@ idle timeout.
 
 You can override these settings for individual plugins through
 `backend.database.plugin.<pluginId>.knexConfig`.
+
+## Microsoft SQL Server
+
+Set `backend.database.client: mssql` to use Microsoft SQL Server 2022 or later.
+Each plugin uses a separate database. See
+[Configuring plugin databases](../../tutorials/configuring-plugin-databases.md#microsoft-sql-server)
+for connection options, permissions, and existing database configuration.
+
+## Portable inserts and updates
+
+SQL Server does not support Knex's `onConflict` method. Use
+`upsertDatabaseRows` from `@backstage/backend-plugin-api` when a plugin must
+insert a row or update an existing row across supported database clients.
+The conflict columns need a unique constraint or index. SQL Server updates
+lock the matching key range so that concurrent writers cannot insert the same
+key. Large writes run in one transaction and stay within the SQL Server
+parameter limit.
+
+Use `getDatabaseNow` for database timestamps that you compare with UTC dates.
+It uses UTC on SQL Server, where `CURRENT_TIMESTAMP` uses the server's local
+time.
+
+```ts
+import {
+  getDatabaseNow,
+  upsertDatabaseRows,
+} from '@backstage/backend-plugin-api';
+
+await upsertDatabaseRows({
+  knex: client,
+  table: 'settings',
+  rows: [
+    { id: 'example', value: 'new value', updated_at: getDatabaseNow(client) },
+  ],
+  conflictColumns: ['id'],
+  update: ['value', 'updated_at'],
+});
+```

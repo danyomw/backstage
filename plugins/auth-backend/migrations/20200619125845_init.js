@@ -20,6 +20,10 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   return knex.schema.createTable('signing_keys', table => {
     table.comment(
       'Signing keys that are currently in use or have recently been used to issue tokens',
@@ -32,7 +36,7 @@ exports.up = async function up(knex) {
     table
       .timestamp('created_at', { useTz: false, precision: 0 })
       .notNullable()
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .comment('The creation time of the key');
     table.string('key').notNullable().comment('The serialized signing key');
   });

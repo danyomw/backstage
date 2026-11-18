@@ -20,6 +20,10 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.createTable('tasks', table => {
     table.comment('The table of scaffolder tasks');
     table.uuid('id').primary().notNullable().comment('The ID of the task');
@@ -33,7 +37,7 @@ exports.up = async function up(knex) {
       .comment('The current status of the task');
     table
       .dateTime('created_at')
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .notNullable()
       .comment('The timestamp when this task was created');
     table
@@ -63,7 +67,7 @@ exports.up = async function up(knex) {
     table.text('event_type').notNullable().comment('The type of event');
     table
       .timestamp('created_at')
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .notNullable()
       .comment('The timestamp when this event was generated');
 

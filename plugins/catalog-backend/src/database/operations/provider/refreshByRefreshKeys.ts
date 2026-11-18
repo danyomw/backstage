@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 import { DbRefreshStateRow } from '../../tables';
 import { generateTargetKey } from '../../util';
@@ -42,5 +43,5 @@ export async function refreshByRefreshKeys(options: {
         })
         .from('refresh_keys');
     })
-    .update({ next_update_at: tx.fn.now() });
+    .update({ next_update_at: getDatabaseNow(tx) });
 }

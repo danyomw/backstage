@@ -46,7 +46,7 @@ const databases = TestDatabases.create({
 });
 
 const nonPostgresDatabases = TestDatabases.create({
-  ids: ['SQLITE_3', 'MYSQL_8'],
+  ids: ['SQLITE_3', 'MYSQL_8', 'MSSQL_2022'],
 });
 
 it('runs the event index migration outside a transaction', () => {

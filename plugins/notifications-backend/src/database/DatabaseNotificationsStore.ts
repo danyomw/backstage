@@ -16,6 +16,7 @@
 import {
   DatabaseService,
   resolvePackagePath,
+  upsertDatabaseRows,
 } from '@backstage/backend-plugin-api';
 import {
   NotificationGetOptions,
@@ -508,17 +509,18 @@ export class DatabaseNotificationsStore implements NotificationsStore {
 
     if (broadcasts.length > 0)
       if (!this.isSQLite) {
-        await this.db<BroadcastUserStatusRowType>('broadcast_user_status')
-          .insert(
-            broadcasts.map(b => ({
-              broadcast_id: b.id,
-              user,
-              read,
-              saved,
-            })),
-          )
-          .onConflict(['broadcast_id', 'user'])
-          .merge({ read, saved });
+        await upsertDatabaseRows({
+          knex: this.db,
+          table: 'broadcast_user_status',
+          rows: broadcasts.map(b => ({
+            broadcast_id: b.id,
+            user,
+            read,
+            saved,
+          })),
+          conflictColumns: ['broadcast_id', 'user'],
+          update: { read, saved },
+        });
       } else {
         // SQLite does not support upsert so fall back to this (mostly for tests and local dev)
         for (const b of broadcasts) {

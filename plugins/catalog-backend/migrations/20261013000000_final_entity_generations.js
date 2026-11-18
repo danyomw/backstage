@@ -46,10 +46,16 @@ exports.up = async function up(knex) {
       });
     }
 
-    await tx('catalog_generation_counter')
-      .insert({ id: 1, generation: 0 })
-      .onConflict('id')
-      .ignore();
+    if (knex.client.config.client === 'mssql') {
+      await tx.raw(
+        'IF NOT EXISTS (SELECT 1 FROM catalog_generation_counter WITH (UPDLOCK, HOLDLOCK) WHERE id = 1) INSERT INTO catalog_generation_counter (id, generation) VALUES (1, 0)',
+      );
+    } else {
+      await tx('catalog_generation_counter')
+        .insert({ id: 1, generation: 0 })
+        .onConflict('id')
+        .ignore();
+    }
 
     if (isPg(knex)) {
       await createPostgresGenerationTrigger(tx);
@@ -100,6 +106,14 @@ exports.down = async function down(knex) {
 
 /** @param {import('knex').Knex} knex */
 async function hasSecondaryIndex(knex) {
+  if (knex.client.config.client === 'mssql') {
+    return Boolean(
+      await knex('sys.indexes')
+        .whereRaw("object_id = OBJECT_ID('final_entities')")
+        .where({ name: indexName })
+        .first(),
+    );
+  }
   if (knex.client.config.client.includes('sqlite')) {
     return Boolean(
       await knex('sqlite_master')

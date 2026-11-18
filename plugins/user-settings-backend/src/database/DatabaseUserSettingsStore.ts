@@ -17,6 +17,7 @@
 import {
   resolvePackagePath,
   DatabaseService,
+  upsertDatabaseRows,
 } from '@backstage/backend-plugin-api';
 import { NotFoundError } from '@backstage/errors';
 import { JsonValue } from '@backstage/types';
@@ -166,15 +167,20 @@ export class DatabaseUserSettingsStore implements UserSettingsStore {
     key: string;
     value: JsonValue;
   }): Promise<void> {
-    await this.db<RawDbUserSettingsRow>('user_settings')
-      .insert({
-        user_entity_ref: options.userEntityRef,
-        bucket: options.bucket,
-        key: options.key,
-        value: JSON.stringify(options.value),
-      })
-      .onConflict(['user_entity_ref', 'bucket', 'key'])
-      .merge(['value']);
+    await upsertDatabaseRows({
+      knex: this.db,
+      table: 'user_settings',
+      rows: [
+        {
+          user_entity_ref: options.userEntityRef,
+          bucket: options.bucket,
+          key: options.key,
+          value: JSON.stringify(options.value),
+        },
+      ],
+      conflictColumns: ['user_entity_ref', 'bucket', 'key'],
+      update: ['value'],
+    });
   }
 
   async delete(options: {

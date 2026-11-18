@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { getDatabaseNow } from '@backstage/backend-plugin-api';
 import { durationToMilliseconds, HumanDuration } from '@backstage/types';
 import { Knex } from 'knex';
 import { DateTime } from 'luxon';
@@ -62,7 +63,7 @@ export async function getDeferredStitchableEntities(options: {
   }>
 > {
   const { knex, batchSize, stitchTimeout } = options;
-  const useLocking = ['mysql', 'mysql2', 'pg'].includes(
+  const useLocking = ['mysql', 'mysql2', 'pg', 'mssql'].includes(
     knex.client.config.client,
   );
 
@@ -76,11 +77,15 @@ export async function getDeferredStitchableEntities(options: {
   const run = async (tx: Knex | Knex.Transaction) => {
     const items: DbStitchQueueRow[] = await tx('stitch_queue')
       .select('entity_ref', 'next_stitch_at', 'stitch_ticket', 'failure_count')
-      .where('next_stitch_at', '<=', tx.fn.now())
+      .where('next_stitch_at', '<=', getDatabaseNow(tx))
       .orderBy('next_stitch_at', 'asc')
       .limit(batchSize)
       .modify(qb => {
-        if (useLocking) {
+        if (tx.client.config.client === 'mssql') {
+          qb.from(
+            tx.raw('?? WITH (UPDLOCK, READPAST, ROWLOCK)', ['stitch_queue']),
+          );
+        } else if (useLocking) {
           qb.forUpdate().skipLocked();
         }
       });
@@ -137,6 +142,19 @@ export async function getDeferredStitchableEntities(options: {
           'entity_ref',
           items.map(i => i.entity_ref),
         );
+    } else if (tx.client.config.client === 'mssql') {
+      await update;
+      leases = await tx('stitch_queue')
+        .select(
+          'entity_ref',
+          tx.raw(
+            'CONVERT(nvarchar(33), next_stitch_at, 126) as next_stitch_at',
+          ),
+        )
+        .whereIn(
+          'entity_ref',
+          items.map(i => i.entity_ref),
+        );
     } else {
       leases = await update.returning(['entity_ref', 'next_stitch_at']);
     }
@@ -163,6 +181,12 @@ function nowPlus(knex: Knex, milliseconds: number): Knex.Raw {
     return knex.raw(`datetime('now', ?)`, [`${seconds} seconds`]);
   } else if (knex.client.config.client.includes('mysql')) {
     return knex.raw(`now() + interval ${seconds} second`);
+  } else if (knex.client.config.client === 'mssql') {
+    const wholeSeconds = Math.trunc(seconds);
+    return knex.raw(
+      'DATEADD(second, ?, DATEADD(millisecond, ?, SYSUTCDATETIME()))',
+      [wholeSeconds, Math.round((seconds - wholeSeconds) * 1000)],
+    );
   }
   return knex.raw(`now() + interval '${seconds} seconds'`);
 }

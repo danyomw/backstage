@@ -607,7 +607,9 @@ describe.each(databases.eachSupportedId())(
               });
             }),
           ).rejects.toMatchObject({
-            message: expect.stringMatching(/not[- ]null|cannot be null/i),
+            message: expect.stringMatching(
+              /not[- ]null|cannot be null|does not allow nulls/i,
+            ),
           });
 
           await expect(

@@ -39,6 +39,13 @@ export function dbTime(t: Date | string): DateTime {
 
 export function nowPlus(duration: Duration | undefined, knex: Knex) {
   const seconds = duration?.as('seconds') ?? 0;
+  if (knex.client.config.client === 'mssql') {
+    const wholeSeconds = Math.trunc(seconds);
+    return knex.raw(
+      'DATEADD(second, ?, DATEADD(millisecond, ?, SYSUTCDATETIME()))',
+      [wholeSeconds, Math.round((seconds - wholeSeconds) * 1000)],
+    );
+  }
   if (!seconds) {
     return knex.fn.now();
   }

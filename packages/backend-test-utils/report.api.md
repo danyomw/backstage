@@ -542,6 +542,7 @@ export type TestDatabaseId =
   | 'POSTGRES_11'
   | 'POSTGRES_9'
   | 'MYSQL_8'
+  | 'MSSQL_2022'
   | 'SQLITE_3';
 
 // @public

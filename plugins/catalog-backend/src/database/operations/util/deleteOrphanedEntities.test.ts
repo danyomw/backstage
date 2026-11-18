@@ -160,11 +160,18 @@ describe.each(databases.eachSupportedId())(
       );
       expect(candidateQueries).toHaveLength(1);
 
-      const expectedCte = knex.client.config.client.includes('pg')
-        ? 'with "orphan_refs"("entity_ref") as materialized ' +
-          '(select "refresh_state"."entity_ref" from "refresh_state"'
-        : 'with `orphan_refs`(`entity_ref`) as ' +
-          '(select `refresh_state`.`entity_ref` from `refresh_state`';
+      let expectedCte =
+        'with `orphan_refs`(`entity_ref`) as ' +
+        '(select `refresh_state`.`entity_ref` from `refresh_state`';
+      if (knex.client.config.client.includes('pg')) {
+        expectedCte =
+          'with "orphan_refs"("entity_ref") as materialized ' +
+          '(select "refresh_state"."entity_ref" from "refresh_state"';
+      } else if (knex.client.config.client === 'mssql') {
+        expectedCte =
+          'with [orphan_refs]([entity_ref]) as ' +
+          '(select [refresh_state].[entity_ref] from [refresh_state]';
+      }
       expect(candidateQueries[0]).toContain(expectedCte);
     });
 

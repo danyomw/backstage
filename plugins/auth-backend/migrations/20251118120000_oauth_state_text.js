@@ -32,7 +32,11 @@ exports.down = async function down(knex) {
   // Delete sessions with state > 255 chars since they won't fit in varchar(255)
   // These sessions would be unusable with truncated state anyway
   await knex('oauth_authorization_sessions')
-    .whereRaw('LENGTH(state) > 255')
+    .whereRaw(
+      knex.client.config.client === 'mssql'
+        ? 'DATALENGTH(state) > 510'
+        : 'LENGTH(state) > 255',
+    )
     .delete();
 
   await knex.schema.alterTable('oauth_authorization_sessions', table => {

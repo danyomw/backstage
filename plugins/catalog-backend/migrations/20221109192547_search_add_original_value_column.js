@@ -20,6 +20,10 @@
  * @param { import("knex").Knex } knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   // Start out with an original_value column that's equal to the value column
   await knex.schema.alterTable('search', table => {
     table
@@ -37,7 +41,7 @@ exports.up = async function up(knex) {
   await knex('final_entities').update({ hash: '' });
   await knex('refresh_state').update({
     result_hash: '',
-    next_update_at: knex.fn.now(),
+    next_update_at: now,
   });
 };
 

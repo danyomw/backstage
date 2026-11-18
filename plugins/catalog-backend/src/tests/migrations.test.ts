@@ -491,7 +491,9 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
 
     // Verify that the target column is now 'text'
     const columnInfo = await knex('locations').columnInfo();
-    expect(columnInfo.target.type).toBe('text');
+    expect(columnInfo.target.type).toBe(
+      knex.client.config.client === 'mssql' ? 'nvarchar' : 'text',
+    );
 
     // Insert a long URL (exceeding 255 characters)
     await knex
@@ -537,7 +539,7 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
     // Verify that the column type has reverted to varchar
     const revertedColumnInfo = await knex('locations').columnInfo();
     expect(revertedColumnInfo.target.type).toMatch(
-      /^(varchar|character varying)$/,
+      /^(nvarchar|varchar|character varying)$/,
     );
 
     // Verify that the short URL still exists in the table
@@ -703,9 +705,12 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
 
     // Verify the schema after the migration
     const columnInfo = await knex('refresh_state').columnInfo();
-    const expectedType = knex.client.config.client.includes('mysql')
-      ? 'longtext'
-      : 'text';
+    let expectedType = 'text';
+    if (knex.client.config.client.includes('mysql')) {
+      expectedType = 'longtext';
+    } else if (knex.client.config.client === 'mssql') {
+      expectedType = 'nvarchar';
+    }
     expect(columnInfo.unprocessed_entity.type).toBe(expectedType);
     expect(columnInfo.cache.type).toBe(expectedType);
 
@@ -727,8 +732,10 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
 
     // Verify the schema after rolling back
     const revertedColumnInfo = await knex('refresh_state').columnInfo();
-    expect(revertedColumnInfo.unprocessed_entity.type).toBe('text');
-    expect(revertedColumnInfo.cache.type).toBe('text');
+    const revertedType =
+      knex.client.config.client === 'mssql' ? 'nvarchar' : 'text';
+    expect(revertedColumnInfo.unprocessed_entity.type).toBe(revertedType);
+    expect(revertedColumnInfo.cache.type).toBe(revertedType);
 
     // Verify the data after rolling back
     const postRollbackData = await knex('refresh_state')
@@ -1518,6 +1525,14 @@ describe.each(databases.eachSupportedId())('migrations, %p', databaseId => {
           [name],
         );
         return rows.length > 0;
+      }
+      if (client === 'mssql') {
+        return Boolean(
+          await knex('sys.indexes')
+            .whereRaw("object_id = OBJECT_ID('relations')")
+            .where({ name })
+            .first(),
+        );
       }
       // SQLite
       const r = await knex.raw(

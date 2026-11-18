@@ -397,6 +397,17 @@ export interface DatabaseService {
 }
 
 // @public
+export type DatabaseUpsertOptions = {
+  knex: Knex | Knex.Transaction;
+  table: string;
+  rows: Array<Record<string, unknown>>;
+  conflictColumns: string[];
+  update?: string[] | Record<string, unknown>;
+  ignore?: boolean;
+  where?: Knex.Raw;
+};
+
+// @public
 export interface DiscoveryService {
   getBaseUrl(pluginId: string): Promise<string>;
   getExternalBaseUrl(pluginId: string): Promise<string>;
@@ -414,6 +425,9 @@ export type ExtensionPoint<T> = {
 export interface ExtensionPointFactoryContext {
   reportModuleStartupFailure(options: { error: Error }): void;
 }
+
+// @public
+export function getDatabaseNow(knex: Knex | Knex.Transaction): Knex.Raw;
 
 // @public
 export interface HttpAuthService {
@@ -820,6 +834,11 @@ export interface ServiceRefOptions<
   // (undocumented)
   scope?: TScope;
 }
+
+// @public
+export function upsertDatabaseRows(
+  options: DatabaseUpsertOptions,
+): Promise<void>;
 
 // @public
 export interface UrlReaderService {

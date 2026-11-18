@@ -17,6 +17,7 @@
 import { Knex } from 'knex';
 import { isDockerDisabledForTests } from '../util/isDockerDisabledForTests';
 import { MysqlEngine } from './mysql';
+import { MssqlEngine } from './mssql';
 import { PostgresEngine } from './postgres';
 import { SqliteEngine } from './sqlite';
 import {
@@ -40,6 +41,7 @@ export class TestDatabases {
     pg: PostgresEngine.create,
     mysql: MysqlEngine.create,
     mysql2: MysqlEngine.create,
+    mssql: MssqlEngine.create,
     'better-sqlite3': SqliteEngine.create,
     sqlite3: SqliteEngine.create,
   };

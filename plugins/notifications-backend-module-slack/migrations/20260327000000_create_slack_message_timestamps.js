@@ -19,6 +19,10 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   await knex.schema.createTable(
     'slack_message_timestamps',
     function tableSetup(table) {
@@ -28,12 +32,19 @@ exports.up = async function up(knex) {
       table.string('ts', 64).notNullable();
       table
         .timestamp('created_at', { useTz: true })
-        .defaultTo(knex.fn.now())
+        .defaultTo(now)
         .notNullable();
-      table.primary(['origin', 'scope', 'channel']);
+      if (knex.client.config.client !== 'mssql') {
+        table.primary(['origin', 'scope', 'channel']);
+      }
       table.index('created_at', 'idx_slack_message_timestamps_created_at');
     },
   );
+  if (knex.client.config.client === 'mssql') {
+    await knex.raw(
+      'ALTER TABLE slack_message_timestamps ADD CONSTRAINT slack_message_timestamps_pkey PRIMARY KEY NONCLUSTERED (origin, scope, channel)',
+    );
+  }
 };
 
 /**

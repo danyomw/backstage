@@ -40,6 +40,11 @@ export function whereInArray(column: string, values: string[]) {
   return (qb: Knex.QueryBuilder) => {
     if (qb.client.config.client === 'pg') {
       qb.whereRaw('?? = ANY(?::text[])', [column, values]);
+    } else if (qb.client.config.client === 'mssql') {
+      qb.whereRaw('?? IN (SELECT [value] FROM OPENJSON(?))', [
+        column,
+        JSON.stringify(values),
+      ]);
     } else {
       qb.whereIn(column, values);
     }
@@ -102,6 +107,15 @@ export function isDeadlockError(
 
   if (knex.client.config.client.includes('mysql')) {
     return isError(e) && (e as any).errno === 1213;
+  }
+
+  if (knex.client.config.client === 'mssql') {
+    return (
+      isError(e) &&
+      ((e as any).number === 1205 ||
+        (Array.isArray((e as any).errors) &&
+          (e as any).errors.some((error: any) => error.number === 1205)))
+    );
   }
 
   return false;

@@ -18,6 +18,7 @@ import { JsonObject } from '@backstage/types';
 import {
   DatabaseService,
   resolvePackagePath,
+  getDatabaseNow,
 } from '@backstage/backend-plugin-api';
 import { ConflictError, NotFoundError } from '@backstage/errors';
 import { Knex } from 'knex';
@@ -450,7 +451,7 @@ export class DatabaseTaskStore implements TaskStore {
         .where({ id: task.id, status: 'open' })
         .update({
           status: 'processing',
-          last_heartbeat_at: this.db.fn.now(),
+          last_heartbeat_at: getDatabaseNow(this.db),
           // Retain secrets only when recovery is enabled (globally or via the
           // legacy per-template strategy) so recovered tasks can resume.
           // Otherwise clear them on claim to preserve the default security
@@ -489,7 +490,7 @@ export class DatabaseTaskStore implements TaskStore {
     const updateCount = await this.db<RawDbTaskRow>('tasks')
       .where({ id: taskId, status: 'processing' })
       .update({
-        last_heartbeat_at: this.db.fn.now(),
+        last_heartbeat_at: getDatabaseNow(this.db),
       });
     if (updateCount === 0) {
       throw new ConflictError(`No running task with taskId ${taskId} found`);
@@ -770,7 +771,7 @@ export class DatabaseTaskStore implements TaskStore {
         .update({
           ...(secrets && { secrets: JSON.stringify(secrets) }),
           status: 'open',
-          last_heartbeat_at: this.db.fn.now(),
+          last_heartbeat_at: getDatabaseNow(this.db),
         });
 
       if (Number(updateCount) !== 1) {
@@ -819,7 +820,7 @@ export class DatabaseTaskStore implements TaskStore {
         .update(
           {
             status: 'open',
-            last_heartbeat_at: this.db.fn.now(),
+            last_heartbeat_at: getDatabaseNow(this.db),
           },
           ['id', 'spec'],
         );

@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-import { LoggerService } from '@backstage/backend-plugin-api';
+import {
+  LoggerService,
+  upsertDatabaseRows,
+  getDatabaseNow,
+} from '@backstage/backend-plugin-api';
 import { ConflictError, NotFoundError } from '@backstage/errors';
 import { CronTime } from 'cron';
 import { Knex } from 'knex';
@@ -154,7 +158,7 @@ export class TaskWorker {
       .where('id', '=', taskId)
       .whereNull('current_run_ticket')
       .update({
-        next_run_start_at: knex.fn.now(),
+        next_run_start_at: getDatabaseNow(knex),
       });
     if (updatedRows < 1) {
       throw new ConflictError(`Task ${taskId} is currently running`);
@@ -183,7 +187,7 @@ export class TaskWorker {
         current_run_ticket: knex.raw('null'),
         current_run_started_at: knex.raw('null'),
         current_run_expires_at: knex.raw('null'),
-        last_run_ended_at: knex.fn.now(),
+        last_run_ended_at: getDatabaseNow(knex),
         last_run_error_json: serializeError(new Error('Task was cancelled')),
       });
     if (updatedRows < 1) {
@@ -348,7 +352,7 @@ export class TaskWorker {
       nextStartAt = this.knex.raw('null');
       startAt ||= nextStartAt;
     } else {
-      startAt ||= this.knex.fn.now();
+      startAt ||= getDatabaseNow(this.knex);
       nextStartAt = nowPlus(Duration.fromISO(settings.cadence), this.knex);
     }
 
@@ -357,42 +361,28 @@ export class TaskWorker {
     // It's OK if the task already exists; if it does, just replace its
     // settings with the new value and start the loop as usual.
     const settingsJson = JSON.stringify(settings);
-    await this.knex<DbTasksRow>(DB_TASKS_TABLE)
-      .insert({
-        id: this.taskId,
+    const currentStart = this.knex.client.config.client.includes('mysql')
+      ? 'next_run_start_at'
+      : `${DB_TASKS_TABLE}.next_run_start_at`;
+    await upsertDatabaseRows({
+      knex: this.knex,
+      table: DB_TASKS_TABLE,
+      rows: [
+        {
+          id: this.taskId,
+          settings_json: settingsJson,
+          next_run_start_at: startAt,
+        },
+      ],
+      conflictColumns: ['id'],
+      update: {
         settings_json: settingsJson,
-        next_run_start_at: startAt,
-      })
-      .onConflict('id')
-      .merge(
-        this.knex.client.config.client.includes('mysql')
-          ? {
-              settings_json: settingsJson,
-              next_run_start_at: this.knex.raw(
-                `CASE WHEN ?? IS NULL OR ?? < ?? THEN ?? ELSE ?? END`,
-                [
-                  'next_run_start_at',
-                  nextStartAt,
-                  'next_run_start_at',
-                  nextStartAt,
-                  'next_run_start_at',
-                ],
-              ),
-            }
-          : {
-              settings_json: this.knex.ref('excluded.settings_json'),
-              next_run_start_at: this.knex.raw(
-                `CASE WHEN ?? IS NULL OR ?? < ?? THEN ?? ELSE ?? END`,
-                [
-                  `${DB_TASKS_TABLE}.next_run_start_at`,
-                  nextStartAt,
-                  `${DB_TASKS_TABLE}.next_run_start_at`,
-                  nextStartAt,
-                  `${DB_TASKS_TABLE}.next_run_start_at`,
-                ],
-              ),
-            },
-      );
+        next_run_start_at: this.knex.raw(
+          `CASE WHEN ?? IS NULL OR ?? < ?? THEN ?? ELSE ?? END`,
+          [currentStart, nextStartAt, currentStart, nextStartAt, currentStart],
+        ),
+      },
+    });
   }
 
   /**
@@ -435,7 +425,7 @@ export class TaskWorker {
     ticket: string,
     settings: TaskSettingsV2,
   ): Promise<boolean> {
-    const startedAt = this.knex.fn.now();
+    const startedAt = getDatabaseNow(this.knex);
     const expiresAt = settings.timeoutAfterDuration
       ? nowPlus(Duration.fromISO(settings.timeoutAfterDuration), this.knex)
       : this.knex.raw('null');
@@ -484,6 +474,18 @@ export class TaskWorker {
       );
     }
 
+    if (knex.client.config.client === 'mssql') {
+      const wholeSeconds = Math.trunc(dt);
+      const next = knex.raw(
+        'DATEADD(second, ?, DATEADD(millisecond, ?, next_run_start_at))',
+        [wholeSeconds, Math.round((dt - wholeSeconds) * 1000)],
+      );
+      return knex.raw(
+        'CASE WHEN ? > SYSUTCDATETIME() THEN ? ELSE SYSUTCDATETIME() END',
+        [next, next],
+      );
+    }
+
     return knex.raw(
       `greatest(next_run_start_at + interval '${dt} seconds', now())`,
     );
@@ -504,7 +506,7 @@ export class TaskWorker {
         current_run_ticket: this.knex.raw('null'),
         current_run_started_at: this.knex.raw('null'),
         current_run_expires_at: this.knex.raw('null'),
-        last_run_ended_at: this.knex.fn.now(),
+        last_run_ended_at: getDatabaseNow(this.knex),
         last_run_error_json: error
           ? serializeError(error)
           : this.knex.raw('null'),
@@ -514,6 +516,9 @@ export class TaskWorker {
   }
 
   private static nextRunAtRaw(knex: Knex, time: DateTime): Knex.Raw {
+    if (knex.client.config.client === 'mssql') {
+      return knex.raw('?', [time.toJSDate()]);
+    }
     if (knex.client.config.client.includes('sqlite3')) {
       return knex.raw('datetime(?)', [time.toISO()]);
     }

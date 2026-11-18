@@ -20,13 +20,17 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   // Sqlite does not support alter column.
   if (!knex.client.config.client.includes('sqlite3')) {
     await knex.schema.alterTable('signing_keys', table => {
       table
         .timestamp('created_at', { useTz: true, precision: 0 })
         .notNullable()
-        .defaultTo(knex.fn.now())
+        .defaultTo(now)
         .comment('The creation time of the key')
         .alter({ alterType: true });
     });
@@ -37,13 +41,17 @@ exports.up = async function up(knex) {
  * @param {import('knex').Knex} knex
  */
 exports.down = async function down(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   // Sqlite does not support alter column.
   if (!knex.client.config.client.includes('sqlite3')) {
     await knex.schema.alterTable('signing_keys', table => {
       table
         .timestamp('created_at', { useTz: false, precision: 0 })
         .notNullable()
-        .defaultTo(knex.fn.now())
+        .defaultTo(now)
         .comment('The creation time of the key')
         .alter({ alterType: true });
     });

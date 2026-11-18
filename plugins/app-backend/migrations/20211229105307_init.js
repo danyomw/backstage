@@ -20,12 +20,17 @@
  * @param {import('knex').Knex} knex
  */
 exports.up = async function up(knex) {
+  const now =
+    knex.client.config.client === 'mssql'
+      ? knex.raw('SYSUTCDATETIME()')
+      : knex.fn.now();
   const isMySQL = knex.client.config.client.includes('mysql');
+  const isMssql = knex.client.config.client === 'mssql';
   await knex.schema.createTable('static_assets_cache', table => {
     table.comment(
       'A cache of static assets that where previously deployed and may still be lazy-loaded by clients',
     );
-    if (!isMySQL) {
+    if (!isMySQL && !isMssql) {
       table
         .text('path')
         .primary()
@@ -36,7 +41,7 @@ exports.up = async function up(knex) {
     }
     table
       .dateTime('last_modified_at')
-      .defaultTo(knex.fn.now())
+      .defaultTo(now)
       .notNullable()
       .comment(
         'Timestamp of when the asset was most recently seen in a deployment',
@@ -48,6 +53,14 @@ exports.up = async function up(knex) {
   if (isMySQL) {
     await knex.schema.raw(
       'create unique index static_assets_cache_path_idx on static_assets_cache(path(254));',
+    );
+  }
+  if (isMssql) {
+    await knex.raw(
+      "ALTER TABLE static_assets_cache ADD path_hash AS CONVERT(binary(32), HASHBYTES('SHA2_256', path)) PERSISTED",
+    );
+    await knex.raw(
+      'CREATE UNIQUE INDEX static_assets_cache_path_idx ON static_assets_cache(path_hash)',
     );
   }
 };

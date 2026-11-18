@@ -26,7 +26,9 @@ exports.up = async function up(knex) {
 
   await knex('entities').update({
     full_name: knex.raw(
-      "LOWER(??) || ':' || LOWER(COALESCE(??, 'default')) || '/' || LOWER(??)",
+      knex.client.config.client === 'mssql'
+        ? "LOWER(??) + ':' + LOWER(COALESCE(??, 'default')) + '/' + LOWER(??)"
+        : "LOWER(??) || ':' || LOWER(COALESCE(??, 'default')) || '/' || LOWER(??)",
       ['kind', 'namespace', 'name'],
     ),
   });

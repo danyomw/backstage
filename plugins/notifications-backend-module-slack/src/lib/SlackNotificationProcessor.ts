@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-import { AuthService, LoggerService } from '@backstage/backend-plugin-api';
+import {
+  AuthService,
+  LoggerService,
+  getDatabaseNow,
+  upsertDatabaseRows,
+} from '@backstage/backend-plugin-api';
 import {
   MetricsService,
   MetricsServiceCounter,
@@ -563,11 +568,14 @@ export class SlackNotificationProcessor implements NotificationProcessor {
     ts: string,
   ): Promise<void> {
     try {
-      const now = this.db!.fn.now();
-      await this.db!('slack_message_timestamps')
-        .insert({ origin, scope, channel, ts, created_at: now })
-        .onConflict(['origin', 'scope', 'channel'])
-        .merge({ ts, created_at: now });
+      const now = getDatabaseNow(this.db!);
+      await upsertDatabaseRows({
+        knex: this.db!,
+        table: 'slack_message_timestamps',
+        rows: [{ origin, scope, channel, ts, created_at: now }],
+        conflictColumns: ['origin', 'scope', 'channel'],
+        update: { ts, created_at: now },
+      });
     } catch (error) {
       this.logger.warn('Failed to persist Slack message timestamp', {
         origin,
